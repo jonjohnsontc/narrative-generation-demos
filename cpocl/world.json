@@ -1,13 +1,45 @@
 {
-    "Steps": [
-        {
-            "Description": "char 1 gives char 2"
+    "State": {
+        "Hank": {
+          "name": "Hank",
+          "alive": true,
+          "family": ["Timmy"],
+          "armed": true,
+          "sheriff": false,
+          "at": "Ranch",
+          "inventory": [],
+          "status": "healthy"
+        },
+        "Timmy": {
+          "name": "Timmy",
+          "alive": true,
+          "family": ["Hank"],
+          "armed": false,
+          "sheriff": false,
+          "at": "Ranch",
+          "inventory": [],
+          "status": "healthy"
+        },
+        "William": {
+          "name": "William",
+          "alive": true,
+          "family": [],
+          "armed": true,
+          "sheriff": true,
+          "at": "Saloon",
+          "inventory": [],
+          "status": "healthy"
+        },
+        "Carl": {
+          "name": "Carl",
+          "alive": true,
+          "family": [],
+          "armed": true,
+          "sheriff": false,
+          "at": "Saloon",
+          "inventory": [],
+          "status": "healthy"
         }
-    ],
-    "Characters": {
-        "Kaito Momota": {
-            "Title": "Luminary of the Stars",
-
-        }
-    }
+      },
+    "Goal": ["state", "state.Timmy.alive == false || state.Timmy.status == \"saved\""]
 }
