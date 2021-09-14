@@ -1,45 +1,79 @@
 {
-    "State": {
-        "Hank": {
-          "name": "Hank",
-          "alive": true,
-          "family": ["Timmy"],
-          "armed": true,
-          "sheriff": false,
-          "at": "Ranch",
-          "inventory": [],
-          "status": "healthy"
-        },
-        "Timmy": {
-          "name": "Timmy",
-          "alive": true,
-          "family": ["Hank"],
-          "armed": false,
-          "sheriff": false,
-          "at": "Ranch",
-          "inventory": [],
-          "status": "healthy"
-        },
-        "William": {
-          "name": "William",
-          "alive": true,
-          "family": [],
-          "armed": true,
-          "sheriff": true,
-          "at": "Saloon",
-          "inventory": [],
-          "status": "healthy"
-        },
-        "Carl": {
-          "name": "Carl",
-          "alive": true,
-          "family": [],
-          "armed": true,
-          "sheriff": false,
-          "at": "Saloon",
-          "inventory": [],
-          "status": "healthy"
-        }
-      },
-    "Goal": ["state", "state.Timmy.alive == false || state.Timmy.status == \"saved\""]
+  "State": {
+    "Hank": {
+      "name": "Hank",
+      "alive": true,
+      "family": [
+        "Timmy"
+      ],
+      "armed": true,
+      "sheriff": false,
+      "at": "Ranch",
+      "inventory": [],
+      "status": "healthy"
+    },
+    "Timmy": {
+      "name": "Timmy",
+      "alive": true,
+      "family": [
+        "Hank"
+      ],
+      "armed": false,
+      "sheriff": false,
+      "at": "Ranch",
+      "inventory": [],
+      "status": "healthy"
+    },
+    "William": {
+      "name": "William",
+      "alive": true,
+      "family": [],
+      "armed": true,
+      "sheriff": true,
+      "at": "Saloon",
+      "inventory": [],
+      "status": "healthy"
+    },
+    "Carl": {
+      "name": "Carl",
+      "alive": true,
+      "family": [],
+      "armed": true,
+      "sheriff": false,
+      "at": "Saloon",
+      "inventory": [],
+      "status": "healthy"
+    }
+  },
+  "Goal": [
+    "state",
+    "state.Timmy.alive == false || state.Timmy.status == \"saved\""
+  ],
+  "Actions": [
+    {
+      "name": "snakebite",
+      "description": "char1 is bitten by a snake",
+      "preconditions": [
+        [
+          "state",
+          "char1",
+          "state[char1].status = \"dying\""
+        ]
+      ],
+      "effects": [
+        ""
+      ]
+    },
+    {
+      "name": "travel",
+      "description": "char1 travels fromLoc to toLoc",
+      "preconditions": [
+        ""
+      ],
+      "effects": [
+        ""
+      ]
+    },
+    {}
+  ]
 }

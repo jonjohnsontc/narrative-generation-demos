@@ -4,10 +4,15 @@
 // should be printed to the console, or displayed in the browser
 
 function intendsTo(char, goal, motivatingStep, satisfyingStep) {
-  return new IntentionFrame(char, goal, motivatingStep, satisfyingStep, []);
+  return new IntentionFrame(char, goal, motivatingStep, satisfyingStep);
 }
 
 class IntentionFrame {
+  char;
+  goal;
+  motivatingStep;
+  satisfyingStep;
+  subPlan = [];
   constructor(char, goal, motivatingStep, satisfyingStep, subPlan) {
     this.char = char,
     this.goal = goal,
@@ -19,6 +24,11 @@ class IntentionFrame {
 
 /** Denotes a step in a CPOCL Plan*/
 class Step {
+  persistant;
+  description;
+  preconditions;
+  effects;
+  
   /**
    * Creates a step
    * @param {Array<Function>} preconditions
@@ -260,6 +270,11 @@ function calculateDuration(m1, m2, t, u, if1, if2) {
   let start = Math.max();
 }
 
+
+/**
+ * Simulates a coinflip, and returns either heads (0) or tails (1)
+ * @returns {Number} 0 or 1
+ */
 const coinFlip = () => {
   return Math.floor(Math.random() * 2);
 };
@@ -269,6 +284,11 @@ const randIdx = (arr) => {
 };
 
 class CPOCL {
+  history;
+  flaws;
+  startState;
+  operators;
+  endState;
   constructor(startState, endState) {
     this.history = [];
     this.flaws = [];
@@ -310,6 +330,9 @@ class CPOCL {
   getStep(steps) {
     if (steps.length > 0) {
       answer = coinFlip();
+      
+      // If we get "tails", we generate a random index number from a helper 
+      // fn and return a random step
       if (answer == 1) {
         idx = randIdx(steps);
         return steps[idx];
