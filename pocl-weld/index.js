@@ -11,14 +11,16 @@ let createCausalLink = (creator, consumer) => {
     createdBy: creator,
     consumedBy: consumer,
     // The preposition (or Q) needs to be a string representation of the effect/precondition
-    // shared by the creator and consumer
-    preposition: creator.action.toString(),
+    // shared by the creator and consumer. With this, I'd like to pull the name of the action
+    // objects in `lambduhActions`
+    preposition: creator.action.name,
   };
 };
 // The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`
 // by Daniel Weld.
 function POP(actionOrderCausalLinkArray, agenda) {
   // Here are all of the possible actions.
+  // TODO: Ideally, this is part of input from a user
   let lamduhActions = [
     {
       name: "doThing1",
@@ -52,6 +54,43 @@ function POP(actionOrderCausalLinkArray, agenda) {
     throw Error("no action matches Q, failure");
   };
 
+  // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
+  // if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
+  // and before the goal step (aInf)
+  let updateOrderingConstraints = (aAdd, aNeed, AOLArray) => {
+    let actions = AOLArray.actions.slice();
+    if (AOLArray.actions.find((x) => (x.name === aAdd.name) == null)) {
+      // Find initial action
+      // TODO: Is this the best name for the first action?
+      let firstAction = actions.filter((x) => x.name === "first");
+      // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
+      // but given that assumption we create another constraint with name as first step
+      // and tail as the new action
+      let newConstraint = [
+        {
+          name: aAdd.name,
+          tail: AOLArray.actions[AOLArray.actions.length - 1],
+        },
+        {
+          name: firstAction.name,
+          tail: aAdd.name,
+        },
+      ];
+      let orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+    } else {
+      // if the action isn't new to the plan (AOLArray)
+      let newConstraint = {
+        name: aAdd.name,
+        tail: aNeed.name,
+      };
+      let orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+    }
+    // I'm arbitrarily sorting by name here, so all the ordering constraints
+    // will be grouped as such. I don't think this is important if my assumption
+    // about ordering constraint construction with lesser than pairs (name < tail) is true
+    return orderingConstraintPrime.sort((a, b) => a.name - b.name);
+  };
+
   // 1. If agenda is empty return <A, O, L>
   if (agenda.length === 0) {
     return actionOrderCausalLinkArray;
@@ -64,10 +103,13 @@ function POP(actionOrderCausalLinkArray, agenda) {
     // 3. Action selection
     let aAdd = chooseAction(q, actionOrderCausalLinkArray, lamduhActions);
 
-
+    // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = actionOrderCausalLinkArray.links.concat({});
-    let orderConstrPrime =
-      actionOrderCausalLinkArray.orderingConstraints.concat();
+    let orderConstrPrime = updateOrderingConstraints(
+      aAdd,
+      aNeed,
+      actionOrderCausalLinkArray
+    );
     let actionsPrime = actionOrderCausalLinkArray.actions.concat(aAdd);
 
     // 4. Update the goal set
@@ -75,18 +117,23 @@ function POP(actionOrderCausalLinkArray, agenda) {
 
     // If aAdd is newly instantiated, then for each conjunct Qi, of its precondition,
     // add <Qi, aAdd> to the agenda
-    // In other words, if aAdd.name is not in actionOrderCausalLinkArray, we add it and
-    // q to the agenda
-    // TODO: I have no idea if I'm doing this right - in general it smells weird
+    // In other words, if aAdd.name is not in actionOrderCausalLinkArray, we add each of
+    // its preconditions to the agenda
     if (
-      actionOrderCausalLinkArray.actions.find((x) => x.name === aAdd.name) ===
+      actionOrderCausalLinkArray.actions.find((x) => x.name === aAdd.name) ==
       null
     ) {
-      agendaPrime.concat({ q, aAdd });
+      // This is deterministic (as long as the order of .preconditions doesn't change)
+      // but this is another thing that could possibly be ordered explicitly
+      agendaPrime.push(aAdd.preconditions);
     }
 
     // 5. causal link protection
+
     // 6. recursive invocation
-    POP({actions: actionsPrime, order: orderConstrPrime, links: linksPrime}, agendaPrime);
+    POP(
+      { actions: actionsPrime, order: orderConstrPrime, links: linksPrime },
+      agendaPrime
+    );
   }
 }
