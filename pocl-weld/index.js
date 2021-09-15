@@ -1,21 +1,11 @@
 // Helper fn's are at the top, before POP. These are fn's that I haven't figured out if/how
 // they're used in partial order planning (POP), but I find helpful to illustrate in code
-/**
- * Create a causal link
- * @param {any} creator The Action that spawned
- * @param {any} consumer
- * @returns {any}
- */
-let createCausalLink = (creator, consumer) => {
-  return {
-    createdBy: creator,
-    consumedBy: consumer,
-    // The preposition (or Q) needs to be a string representation of the effect/precondition
-    // shared by the creator and consumer. With this, I'd like to pull the name of the action
-    // objects in `lambduhActions`
-    preposition: creator.action.name,
-  };
+
+// I have this in cpopl/script.js as well
+let coinFlip = () => {
+  return Math.floor(Math.random() * 2);
 };
+
 // The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`
 // by Daniel Weld.
 function POP(actionOrderCausalLinkArray, agenda) {
@@ -59,7 +49,7 @@ function POP(actionOrderCausalLinkArray, agenda) {
   // and before the goal step (aInf)
   let updateOrderingConstraints = (aAdd, aNeed, AOLArray) => {
     let actions = AOLArray.actions.slice();
-    if (AOLArray.actions.find((x) => (x.name === aAdd.name) == null)) {
+    if (actions.find((x) => (x.name === aAdd.name) == null)) {
       // Find initial action
       // TODO: Is this the best name for the first action?
       let firstAction = actions.filter((x) => x.name === "first");
@@ -90,6 +80,79 @@ function POP(actionOrderCausalLinkArray, agenda) {
     // about ordering constraint construction with lesser than pairs (name < tail) is true
     return orderingConstraintPrime.sort((a, b) => a.name - b.name);
   };
+  /**
+   * Create a causal link
+   * @param {any} creator The Action that spawned
+   * @param {any} consumer
+   * @returns {any}
+   */
+  let createCausalLink = (creator, consumer, prep) => {
+    return {
+      createdBy: creator,
+      consumedBy: consumer,
+      // The preposition (or Q) needs to be a string representation of the effect/precondition
+      // shared by the creator and consumer.
+      preposition: prep,
+    };
+  };
+
+  let updateCausalLinks = (causalLinks, action, Q) => {
+    // I'm implying/setting the goal action name as "last"
+    // I'm not sure if all causal links made by new actions
+    // are always set to create a link like this, but I believe so
+    let newCausalLink = createCausalLink(action, "last", Q);
+    return causalLinks.concat(newCausalLink);
+  };
+
+  let insertConstraints = () => {};
+
+  let createOrderingConstraint = (name, tail) => {
+    return {
+      name: name,
+      tail: tail,
+    };
+  };
+
+  let checkForThreats = (action, orderingConstraints, causalLinks) => {
+    // Within each causal link, we need to check to see if it's 'Q' matches the opposite
+    // of any effects within the action we just added.
+    let newOrderingConstraints = orderingConstraints.slice();
+    for (link of causalLinks) {
+      // Because it's a single action, I don't know if it's possible to return more than
+      // one result to potentialThreats
+      potentiaThreats = action.effects.filter(
+        (x) => x === `-${link.preposition}`
+      );
+      if (potentiaThreats.length !== 0) {
+        // If there exists a threat from the action, we need to check the action to see if it's new
+        if (
+          orderingConstraints.filter((x) => x.name === action.name).length === 0
+        ) {
+          // If the action is new, we need to make sure that the ordering constraints we add respect the
+          // rule O = O' U {A0 < Aadd < AInf}. Therefore the ordering constraint needs to be b/w the
+          // action and the consumer of causalLink
+          if (link.createdBy.name === "first") {
+            newOrderingConstraints.push(
+              createOrderingConstraint(action.name, link.consumedBy.name)
+            );
+          }
+        } else {
+          // If it's not new, we can can make either creator, or consumer the tail
+          // In this case, I'll leave it to random "chance" by a coinFlip helper fn
+          if (coinFlip() === 0) {
+            newOrderingConstraints.push(
+              createOrderingConstraint(action.name, link.createdBy.name)
+            );
+          } else {
+            newOrderingConstraints.push(
+              createOrderingConstraint(action.name, link.consumedBy.name)
+            );
+          }
+        }
+      }
+    }
+    return newOrderingConstraints;
+  };
 
   // 1. If agenda is empty return <A, O, L>
   if (agenda.length === 0) {
@@ -104,7 +167,7 @@ function POP(actionOrderCausalLinkArray, agenda) {
     let aAdd = chooseAction(q, actionOrderCausalLinkArray, lamduhActions);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
-    let linksPrime = actionOrderCausalLinkArray.links.concat({});
+    let linksPrime = updateCausalLinks(actionOrderCausalLinkArray.links);
     let orderConstrPrime = updateOrderingConstraints(
       aAdd,
       aNeed,
@@ -129,6 +192,7 @@ function POP(actionOrderCausalLinkArray, agenda) {
     }
 
     // 5. causal link protection
+    orderConstrPrime = checkForThreats(aAdd, orderConstrPrime, linksPrime);
 
     // 6. recursive invocation
     POP(
