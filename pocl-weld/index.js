@@ -5,10 +5,26 @@
 let coinFlip = () => {
   return Math.floor(Math.random() * 2);
 };
+let MGU = (Q, R, B) => {
+  if (B === null) {
+    return
+  }
+}
 
-// The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`
-// by Daniel Weld.
-function POP(actionOrderCausalLinkArray, agenda) {
+// TODO: Don't like this 
+let move = {
+  parameters: ["?b", "?x", "?y"],
+  precondition: [["on", "?b", "?x"], ["clear", "?b"], ["clear", "?y"], ["ne", "?b", "x"], ["ne", "?b", "?y"]],
+  effects: []
+}
+
+/**
+ * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
+ * @param {Map<PropertyKey, Array>} plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
+ * @param {any} agenda 
+ * @returns {Map<PropertyKey, Array>} A complete ordered plan 
+ */
+function POP(plan, agenda) {
   // Here are all of the possible actions.
   // TODO: Ideally, this is part of input from a user
   let lamduhActions = [
@@ -104,8 +120,6 @@ function POP(actionOrderCausalLinkArray, agenda) {
     return causalLinks.concat(newCausalLink);
   };
 
-  let insertConstraints = () => {};
-
   let createOrderingConstraint = (name, tail) => {
     return {
       name: name,
@@ -155,8 +169,10 @@ function POP(actionOrderCausalLinkArray, agenda) {
   };
 
   // 1. If agenda is empty return <A, O, L>
+  // We need to ensure that initial state contains no variable bindings, and all variables mentioned 
+  // in the effects of an operator be included in the preconditions of an operator
   if (agenda.length === 0) {
-    return actionOrderCausalLinkArray;
+    return plan;
   } else {
     // 2. Goal selection
     // we choose an item in the agenda. right now we're selecting the first item
@@ -164,26 +180,26 @@ function POP(actionOrderCausalLinkArray, agenda) {
     let { q, aNeed } = agenda[0];
 
     // 3. Action selection
-    let aAdd = chooseAction(q, actionOrderCausalLinkArray, lamduhActions);
+    let aAdd = chooseAction(q, plan, lamduhActions);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
-    let linksPrime = updateCausalLinks(actionOrderCausalLinkArray.links);
+    let linksPrime = updateCausalLinks(plan.links);
     let orderConstrPrime = updateOrderingConstraints(
       aAdd,
       aNeed,
-      actionOrderCausalLinkArray
+      plan
     );
-    let actionsPrime = actionOrderCausalLinkArray.actions.concat(aAdd);
+    let actionsPrime = plan.actions.concat(aAdd);
 
     // 4. Update the goal set
     let agendaPrime = agenda.splice(0, 1);
 
     // If aAdd is newly instantiated, then for each conjunct Qi, of its precondition,
     // add <Qi, aAdd> to the agenda
-    // In other words, if aAdd.name is not in actionOrderCausalLinkArray, we add each of
+    // In other words, if aAdd.name is not in plan, we add each of
     // its preconditions to the agenda
     if (
-      actionOrderCausalLinkArray.actions.find((x) => x.name === aAdd.name) ==
+      plan.actions.find((x) => x.name === aAdd.name) ==
       null
     ) {
       // This is deterministic (as long as the order of .preconditions doesn't change)
@@ -196,7 +212,7 @@ function POP(actionOrderCausalLinkArray, agenda) {
 
     // 6. recursive invocation
     POP(
-      { actions: actionsPrime, order: orderConstrPrime, links: linksPrime },
+      { actions: actionsPrime, order: orderConstrPrime, links: linksPrime, variableBindings: null },
       agendaPrime
     );
   }
