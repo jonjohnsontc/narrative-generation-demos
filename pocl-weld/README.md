@@ -38,5 +38,6 @@ Expected performance of a search algorithm is O(cb^n), where:
 - Need a way to perform unification
   - **WHAT IS THAT**
   - I think it's a way to ensure that actions are only performed based on valid variable bindings?
-  
+
+
 

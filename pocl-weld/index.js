@@ -1,22 +1,38 @@
 // Helper fn's are at the top, before POP. These are fn's that I haven't figured out if/how
 // they're used in partial order planning (POP), but I find helpful to illustrate in code
+const parsed = require("/Users/jonjohnson/dev/narrative-generation/shared-libs/parser/parser");
 
 // I have this in cpopl/script.js as well
 let coinFlip = () => {
   return Math.floor(Math.random() * 2);
 };
-let MGU = (Q, R, B) => {
-  if (B === null) {
-    return
-  }
-}
 
-// TODO: Don't like this 
-let move = {
-  parameters: ["?b", "?x", "?y"],
-  precondition: [["on", "?b", "?x"], ["clear", "?b"], ["clear", "?y"], ["ne", "?b", "x"], ["ne", "?b", "?y"]],
-  effects: []
-}
+// Here is an example action:
+// {
+//   action: 'move',
+//   parameters: [
+//     { parameter: 'b', type: null },
+//     { parameter: 't1', type: null },
+//     { parameter: 't2', type: null }
+//   ],
+//   precondition: [
+//   { operation: 'and', action: 'block', parameters: [ 'b' ] },
+//   { operation: '', action: 'table', parameters: [ 't1' ] },
+//   { operation: '', action: 'table', parameters: [ 't2' ] },
+//   { operation: '', action: 'on', parameters: [ 'b', 't1' ] },
+//   { operation: 'not', action: 'on', parameters: [ 'b', 't2' ] },
+//   { operation: '', action: 'clear', parameters: [ 'b' ] }
+// ],
+//   effect: [
+//   { operation: 'and', action: 'on', parameters: [ 'b', 't2' ] },
+//   { operation: 'not', action: 'on', parameters: [ 'b', 't1' ] }
+// ]
+// }
+// Given that everything is expressed within an object, how should I design the (non)codedesignation constraints?
+// maybe:
+// { operation: 'not', action: 'eq', parameters: [ 'b', 'y' ] }
+// { operation: '', action: 'eq', parameters: [ 't2', 'y' ] }
+
 
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
@@ -25,35 +41,43 @@ let move = {
  * @returns {Map<PropertyKey, Array>} A complete ordered plan 
  */
 function POP(plan, agenda) {
-  // Here are all of the possible actions.
-  // TODO: Ideally, this is part of input from a user
-  let lamduhActions = [
-    {
-      name: "doThing1",
-      action: () => console.log("did thing 1"),
-      preconditions: [],
-      effect: () => console.log("that effect"),
-    },
-    {
-      name: "doThing2",
-      action: () => console.log("did thing 2"),
-      preconditions: [],
-      effect: () => console.log("this effect"),
-    },
-  ];
+  
+  let isEqual = (Q, effect, B) => {
+    // Q right now is a literal, but it needs more context to work with a binding
+    if (B.length === 0) {
+      // We don't need to test bindings, just compare Q and effect
+    } else {
+      
+      for (binding of B) {
+        // Test if binding matches. If it does, we need to apply it to 
+        Q = testBinding(binding) ? applyBinding(binding, Q) : Q;
+      }
+    }
+  }
 
-  let chooseAction = (Q, AOLArray, actions) => {
+  /**
+   * Given Q, selects an action from the set of AOLArray and actions.
+   * @param {any} Q
+   * @param {any} AOLArray
+   * @param {any} actions
+   * @returns {any} 'aAdd' an action
+   */
+  let chooseAction = (Q, AOLArray, actions, B = []) => {
     // Weld states that action can be chosen from either the array of actions
     // or the AOLArray, but does not give any guidance as to how the action
     // should be selected. I'm going for a super naive, actions array-first approach
-    for (let action of actions) {
-      if (Q.value === action.effect()) {
-        return action;
+    let allActions = actions.concat(AOLArray);
+    
+    for (let aAdd of allActions) {
+      // The choice of aAdd must consider all new & existing actions, such that 
+      // one of aAdd's effects unifies with the goal given the plan's codesignation constraints
+      
+      for (effect of aAdd.effects) {
+      // TODO: the value equality comparison b/w Q and aAdd will likely have to change,
+      // given the structure of effects e.g, { operation: 'and', action: 'on', parameters: [ 'b', 't2' ] }
+        if (isEqual(Q, aAdd.effect, B)) {
+          return aAdd;
       }
-    }
-    for (let AOL of AOLArray) {
-      if (Q.value === AOL.action.effect()) {
-        return AOL.action;
       }
     }
     // If there is no action that can satisfy Q in either array, we return a failure
@@ -65,6 +89,7 @@ function POP(plan, agenda) {
   // and before the goal step (aInf)
   let updateOrderingConstraints = (aAdd, aNeed, AOLArray) => {
     let actions = AOLArray.actions.slice();
+    let orderingConstraintPrime;
     if (actions.find((x) => (x.name === aAdd.name) == null)) {
       // Find initial action
       // TODO: Is this the best name for the first action?
@@ -82,14 +107,14 @@ function POP(plan, agenda) {
           tail: aAdd.name,
         },
       ];
-      let orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+      orderingConstraintPrime = AOLArray.order.concat(newConstraint);
     } else {
       // if the action isn't new to the plan (AOLArray)
       let newConstraint = {
         name: aAdd.name,
         tail: aNeed.name,
       };
-      let orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+      orderingConstraintPrime = AOLArray.order.concat(newConstraint);
     }
     // I'm arbitrarily sorting by name here, so all the ordering constraints
     // will be grouped as such. I don't think this is important if my assumption
