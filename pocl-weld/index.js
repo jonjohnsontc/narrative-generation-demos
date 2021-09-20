@@ -7,6 +7,90 @@ let coinFlip = () => {
   return Math.floor(Math.random() * 2);
 };
 
+// I was thinking about putting together some custom exception types like this
+// Not using the Error object, which I'm not sure is good or bad: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/Error
+const NoUnifierException = (literal) => {
+  return {
+    name: 'NoUnifierException',
+    msg: `_|_, No unifier found for ${literal}`
+  }
+}
+
+/**
+ * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B
+ * @param {any} Q Literal - first portion of an agenda that needs to be satisfied
+ * @param {any} R Literal - likely an effect of an action
+ * @param {any} B Vector of (non)codedesignation constraints
+ * @returns {any} Most general unifier of literals or false
+ */
+function BGU(Q, R, B) {
+  // So if Q is:
+  // { operation: '', action: 'on', parameters: ['b', 'c']}
+  // and R is 
+  // { operation: '', action: 'on', parameters: ['p1', 'p2']}
+  // And variable bindings are: []
+  // We could return:
+  // ['b', 'c'] 
+  
+  // Since R could potentially be modified by binding constraints, we'll make a copy of it inside of a vector
+  // The vector will hold all of the variable contstraints, either positioned before or after R
+  let RCopy = [{...R}]
+  
+  let QArgs = Q.parameters
+
+  // Step one: apply valid variable bindings
+  if (B.length > 0)  {
+    for (binding of B) { 
+      for (arg in Q.parameters) {
+        // TODO?
+        // If we can guarantee that a literal parameter within a binding constraint is always the first or the last
+        // parameter in a parameter array, then we don't have to perform a loop, we can just access that element
+        for (parameter of biding.parameters) {
+          if (parameter === arg) {
+            RCopy.push(binding)
+          }
+        }
+      }
+    }
+  }
+  // Step two: compare Q and R
+  // Q, RCopy
+  let justR = RCopy[0];
+
+  if (justR.operation === Q.operation && justR.action === Q.action) {
+    // If there are any binding constraints in within the RCopy vector
+    // we need to apply them to Q or R, depending on whether operation = 'not'
+    if (RCopy.length > 1) {
+      for (constraint of RCopy.slice(1,)) {
+        // constraint should look something like this:
+        // { operation: 'not', action: 'eq', parameters: [ 'b', 'y' ] }
+        if (constraint.operation === 'not') {
+          
+          // If operation = 'not', then we want to apply the binding constraints 
+          // to Q, to ensure that neither of Q's arguments are within the binding constraints
+          // I'm also assuming that constraint.action is always 'eq'
+          for (arg of Q.parameters) {
+            if (arg === constraint.parameters[0] || arg === constraint.parameters[1]) {
+              throw NoUnifierException(Q)
+            } 
+          }
+        } 
+        // If operation = '', then we want to apply the binding constraints to justR
+        // I'm also assuming that constraint.action is always 'eq'
+        if (constraint.operation === '') {
+          for (arg of constraint) {
+            
+          }
+        }
+      }
+    }
+  } else { 
+    throw NoUnifierException(Q)
+  }
+
+  // Step three: return valid unifier or false
+}
+
 // Here is an example action:
 // {
 //   action: 'move',
@@ -46,12 +130,15 @@ function POP(plan, agenda) {
     // Q right now is a literal, but it needs more context to work with a binding
     if (B.length === 0) {
       // We don't need to test bindings, just compare Q and effect
+      // TODO: This probably won't work, but wanted to have an example up
+      return Q === effect
     } else {
       
       for (binding of B) {
         // Test if binding matches. If it does, we need to apply it to 
         Q = testBinding(binding) ? applyBinding(binding, Q) : Q;
       }
+      return Q === effect
     }
   }
 
@@ -201,11 +288,12 @@ function POP(plan, agenda) {
   } else {
     // 2. Goal selection
     // we choose an item in the agenda. right now we're selecting the first item
-    // but it doesn't need to be
+    // but it doesn't need to be. It's destructured into Q which is a constant, and 
+    // `aNeed` which 
     let { q, aNeed } = agenda[0];
 
     // 3. Action selection
-    let aAdd = chooseAction(q, plan, lamduhActions);
+    let aAdd = chooseAction(q, plan, actions);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = updateCausalLinks(plan.links);
@@ -242,3 +330,4 @@ function POP(plan, agenda) {
     );
   }
 }
+
