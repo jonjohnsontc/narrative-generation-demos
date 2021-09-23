@@ -16,6 +16,20 @@ const NoUnifierException = (literal) => {
   }
 }
 
+// TODO: I'd like to parameterize the "block"/"table" values 
+let getParameters = (stateActions) => {
+  let allActors = new Set();
+
+  for (stateObject of stateActions) {
+    if (stateObject.action === "block" || stateObject.action === "table") {
+      allActors.add(stateObject.parameters[0])
+    } 
+  }
+  return allActors
+}
+
+module.exports.getParameters = getParameters;
+
 /**
  * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B
  * @param {any} Q Literal - first portion of an agenda that needs to be satisfied
@@ -35,6 +49,7 @@ function BGU(Q, R, B) {
   // Since R could potentially be modified by binding constraints, we'll make a copy of it inside of a vector
   // The vector will hold all of the variable contstraints, either positioned before or after R
   let RCopy = [{...R}]
+  let actors = getParameters()
   
   let QArgs = Q.parameters
 
@@ -79,7 +94,18 @@ function BGU(Q, R, B) {
         // I'm also assuming that constraint.action is always 'eq'
         if (constraint.operation === '') {
           for (arg of constraint) {
-            
+            for (param of justR.parameters) {
+              if (arg === param) {
+                // Get opposite constraint and bind it to justR
+                // or create some expression out of constraint that is passed through
+                // as a filter when selecting arguments
+                // constraint should be a pair within a list, so we should be able to use filter,
+                // and pull the result out of the single array
+                let otherArg = constraint.filter((x) => x != arg)[0]
+                let binding = (state) => state === otherArg
+
+              }
+            }
           }
         }
       }
