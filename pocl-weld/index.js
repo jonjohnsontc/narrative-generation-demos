@@ -3,32 +3,107 @@
 const parsed = require("/Users/jonjohnson/dev/narrative-generation/shared-libs/parser/parser");
 
 // I have this in cpopl/script.js as well
+/**
+ * Helper function meant to simulate a coin flip
+ * @returns {Number} either 0 or 1
+ */
 let coinFlip = () => {
   return Math.floor(Math.random() * 2);
 };
+
+let zip = (array1, array2) => {
+  let pairs = [];
+  for (let i = 0; i < array1.length; i++) {
+    pairs.push([array1[i], array2[i]]);
+  }
+  return pairs;
+};
+
+module.exports.zip = zip;
 
 // I was thinking about putting together some custom exception types like this
 // Not using the Error object, which I'm not sure is good or bad: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/Error
 const NoUnifierException = (literal) => {
   return {
-    name: 'NoUnifierException',
-    msg: `_|_, No unifier found for ${literal}`
-  }
-}
+    name: "NoUnifierException",
+    msg: `_|_, No unifier found for ${literal}`,
+  };
+};
 
-// TODO: I'd like to parameterize the "block"/"table" values 
+/**
+ * Returns true if the vector pair a matches the vector pair b
+ * @param {Array} a
+ * @param {Array} b
+ * @returns {Boolean}
+ */
+const pairMatch = function doVectorPairsMatch(a, b) {
+  if (a.length != 2) {
+    throw Error("a length must be 2");
+  }
+  if (b.length != 2) {
+    throw Error("b length must be 2");
+  }
+  if (a[0] === a[1]) {
+    throw Error("member of pairs should not be equal, a is equal");
+  }
+  if (b[0] === b[1]) {
+    throw Error("member of pairs should not be equal, b is equal");
+  }
+  if ((a[0] === b[1] || a[0] === b[0]) && (a[1] === b[0] || a[1] === b[1])) {
+    return true;
+  } else {
+    return false;
+  }
+};
+
+module.exports.pairMatch = pairMatch;
+
+// TODO: I'd like to parameterize the "block"/"table" values
+/**
+ * Description
+ * @param {any} stateActions
+ * @returns {any}
+ */
 let getParameters = (stateActions) => {
   let allActors = new Set();
 
   for (stateObject of stateActions) {
     if (stateObject.action === "block" || stateObject.action === "table") {
-      allActors.add(stateObject.parameters[0])
-    } 
+      allActors.add(stateObject.parameters[0]);
+    }
   }
-  return allActors
-}
+  return [...allActors];
+};
 
 module.exports.getParameters = getParameters;
+
+/**
+ * Creates a binding constraint from the two params provided
+ * @param {any} assignor A parameter from an operator
+ * @param {any} assignee A parameter from an operator or param of Q
+ * @param {boolean} equal true if the params should be set to equal, false if not
+ * @returns {any}
+ */
+let createBindingConstraint = function createBindingConstraintFromLiterals(
+  assignor,
+  assignee,
+  equal
+) {
+  // Making sure the assignor is not capitalized
+  if (assignor.charCodeAt(0) < 96) {
+    throw Error("Invalid assignor");
+  }
+  return {
+    equal: equal,
+
+    // This isn't a construct of POP from Weld, rather something I did to try and more easily
+    // differentiate constants from Q vs params from an operator
+    assignor: assignor,
+    assignee: assignee,
+  };
+};
+
+module.exports.createBindingConstraint = createBindingConstraint;
 
 /**
  * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B
@@ -37,85 +112,183 @@ module.exports.getParameters = getParameters;
  * @param {any} B Vector of (non)codedesignation constraints
  * @returns {any} Most general unifier of literals or false
  */
-function BGU(Q, R, B) {
+let MGU = function findMostGenerialUnifier(Q, R, B) {
   // So if Q is:
   // { operation: '', action: 'on', parameters: ['b', 'c']}
-  // and R is 
+  // and R is
   // { operation: '', action: 'on', parameters: ['p1', 'p2']}
   // And variable bindings are: []
   // We could return:
-  // ['b', 'c'] 
-  
+  // ['b', 'c']
+
   // Since R could potentially be modified by binding constraints, we'll make a copy of it inside of a vector
   // The vector will hold all of the variable contstraints, either positioned before or after R
-  let RCopy = [{...R}]
-  let actors = getParameters()
-  
-  let QArgs = Q.parameters
+  let RCopy = [{ ...R }];
 
+  // For the most general unifier, let's just assume Q's parameters
+  /** @type {Array} */
+  let QArgs = Q.parameters;
+  let checkBindings = function checkBindingsForConflict(binding, effect, Q) {
+    // binding each parameter with each value
+    qPairs = zip(effect.parameters, Q.parameters);
+
+    // If it's an equals binding, we need to make sure that the value within the binding linked to the
+    // operator's parameter is resolvable to our chosen parameters
+    if (binding.equal) {
+      // If the assignee is capitalized, then we want to make sure that the variable it's set
+      // equal to is the same as the variable tied to it in qPairs
+      if (binding.assignee.charCodeAt(0) < 96) {
+        let qBinding = qPairs.filter(x => x[0] === binding.assignee || x[1] === binding.assignee);
+        
+        // If the binding pair and the binding scenario are equal, then there is no coflict and we can return true
+        // Otherwise we return false
+        return pairMatch([binding.assignor, binding.assignee], qBinding[0])
+      } else {
+        // to my knowledge, there shouldn't be equal bindings between variable names
+        // if there is, I should figure out the right way to handle them
+        throw Error(`Invalid Binding, ${binding}`)
+      }
+      // else binding is not equal (noncodesignation constraint)
+    } else {
+      if (binding.assignee.charCodeAt(0) < 96) {
+        let qBinding = qPairs.filter(x => x[0] === binding.assignee || x[1] === binding.assignee);
+
+        return !pairMatch([binding.assignor, binding.assignee], qBinding[0])
+      } else {
+        // We're going to look at the variable pairs and make sure that they aren't equal
+        // TODO: What do i do if it's a variable from something in A? 
+        // TODO: Would it ever be something not in Q or R?
+        let vBinding = "";
+      }
+    }
+  };
   // Step one: apply valid variable bindings
-  if (B.length > 0)  {
-    for (binding of B) { 
-      for (arg in Q.parameters) {
-        // TODO?
-        // If we can guarantee that a literal parameter within a binding constraint is always the first or the last
-        // parameter in a parameter array, then we don't have to perform a loop, we can just access that element
-        for (parameter of biding.parameters) {
-          if (parameter === arg) {
-            RCopy.push(binding)
-          }
-        }
-      }
-    }
-  }
   // Step two: compare Q and R
-  // Q, RCopy
-  let justR = RCopy[0];
-
-  if (justR.operation === Q.operation && justR.action === Q.action) {
-    // If there are any binding constraints in within the RCopy vector
-    // we need to apply them to Q or R, depending on whether operation = 'not'
-    if (RCopy.length > 1) {
-      for (constraint of RCopy.slice(1,)) {
-        // constraint should look something like this:
-        // { operation: 'not', action: 'eq', parameters: [ 'b', 'y' ] }
-        if (constraint.operation === 'not') {
-          
-          // If operation = 'not', then we want to apply the binding constraints 
-          // to Q, to ensure that neither of Q's arguments are within the binding constraints
-          // I'm also assuming that constraint.action is always 'eq'
-          for (arg of Q.parameters) {
-            if (arg === constraint.parameters[0] || arg === constraint.parameters[1]) {
-              throw NoUnifierException(Q)
-            } 
-          }
-        } 
-        // If operation = '', then we want to apply the binding constraints to justR
-        // I'm also assuming that constraint.action is always 'eq'
-        if (constraint.operation === '') {
-          for (arg of constraint) {
-            for (param of justR.parameters) {
-              if (arg === param) {
-                // Get opposite constraint and bind it to justR
-                // or create some expression out of constraint that is passed through
-                // as a filter when selecting arguments
-                // constraint should be a pair within a list, so we should be able to use filter,
-                // and pull the result out of the single array
-                let otherArg = constraint.filter((x) => x != arg)[0]
-                let binding = (state) => state === otherArg
-
-              }
-            }
-          }
+  if (B.length > 0) {
+    for (binding of B) {
+      // If any binding parameters are equal to any of Q's or the effects parameters, we will evaluate
+      // via `checkBindings`
+      if (
+        binding.assignee === QArgs[0] ||
+        binding.assignee === QArgs[1] ||
+        binding.assignee === effect.parameters[0] ||
+        binding.assignee === effect.parameters[1] ||
+        binding.assignor === QArgs[0] ||
+        binding.assignor === QArgs[1] ||
+        binding.assignor === effect.parameters[0] ||
+        binding.assignor === effect.parameters[1]
+      ) {
+        if (checkBindings(binding, R, Q)) {
+          continue
+        } else {
+          throw NoUnifierException(Q)
         }
       }
     }
-  } else { 
-    throw NoUnifierException(Q)
   }
 
-  // Step three: return valid unifier or false
-}
+  return QArgs
+};
+module.exports.MGU = MGU;
+
+// TODO: This needs to bind params in the correct order
+/**
+ * Binds parameters to an action. If the action contains more parameters than specified,
+ * a nondeterministic choose is called which retrieves any additional arguments
+ * @param {any} action
+ * @param {any} args
+ * @returns {any}
+ */
+let bindParams = function bindParameters(action, args) {
+  let actionWithParams = { ...action };
+  // If the number of parameters is the same as the number of args
+  // we can bind them without needing to generate additional args
+  if (actionWithParams.parameters.length === args.length) {
+    actionWithParams.parameters = args;
+  }
+  return actionWithParams;
+};
+
+module.exports.bindParams = bindParams;
+
+let isNew = function isActionNew(action) {
+  return action.parameters[0].parameter.charCodeAt(0) > 96;
+};
+
+module.exports.isNew = isNew;
+
+// I had build this to try and make a recursive way of checking the newness of all params
+// but I keep either running into recursion errors or returning undefined
+// TODO: Port to cljs and see if works?
+let verifyPreconditions = function checkAllPreconditions(
+  parameters,
+  isActionNew
+) {
+  if (parameters.length === 0) {
+    return isActionNew;
+  } else {
+    // Is the parameter an upper or lowercase? We check by looking at the charcode of the parameter
+    let isThisParamNew = parameters[0].parameter.charCodeAt(0) > 96;
+
+    // If 'isNewAction' is consistent with the current param, or undefined, we recur
+    // otherwise we throw an error that the action is bad
+    if (isThisParamNew === isActionNew || typeof isActionNew === "undefined") {
+      checkAllPreconditions(parameters.slice(1), isThisParamNew);
+    } else {
+      return "butt";
+    }
+  }
+};
+
+/**
+ * Given Q, selects an action from the set of AOLArray and actions.
+ * @param {any} Q
+ * @param {any} AOLArray
+ * @param {any} actions
+ * @returns {any} 'aAdd' an action
+ */
+let chooseAction = function findActionThatSatisfiesQ(
+  Q,
+  AOLArray,
+  actions,
+  B = []
+) {
+  // Weld states that action can be chosen from either the array of actions
+  // or the AOLArray, but does not give any guidance as to how the action
+  // should be selected. I'm going for a super naive, actions array-first approach
+  /** @type {Array<Map<PropertyKey, Map<PropertyKey, Array>>>} */
+  let allActions = actions.concat(AOLArray);
+
+  for (let aAdd of allActions) {
+    // The choice of aAdd must consider all new & existing actions, such that
+    // one of aAdd's effects unifies with the goal given the plan's codesignation constraints
+    for (let effect of aAdd.effects) {
+      // If an effect matches the `action` Q, that means we have a match, and can perform
+      // MGU to ensure we have a matching set of arguments/parameters
+      let unifiers, newBindingConstraints;
+      if (Q.action === effect.action && Q.operation === effect.operation) {
+        try {
+          unifiers = MGU(Q, effect, B, A);
+          newBindingConstraints = createBindingConstraint(unifiers);
+
+          // the action needs to be returned to add to A
+          // newConstraints need to be returned to be added to B
+          return aAdd, newBindingConstraints;
+        } catch (error) {
+          // If MGU doesn't work, we should break out of the action, and into the next one
+          // TODO: I don't know if this will work
+          console.log(error);
+
+          break;
+        }
+      } else {
+        continue;
+      }
+    }
+    // If there is no action that can satisfy Q in either array, we return a failure
+    throw Error("no action matches Q, failure");
+  }
+};
 
 // Here is an example action:
 // {
@@ -142,61 +315,16 @@ function BGU(Q, R, B) {
 // maybe:
 // { operation: 'not', action: 'eq', parameters: [ 'b', 'y' ] }
 // { operation: '', action: 'eq', parameters: [ 't2', 'y' ] }
-
+// { action: 'eq' | 'noteq', }
+//
 
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
  * @param {Map<PropertyKey, Array>} plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
- * @param {any} agenda 
- * @returns {Map<PropertyKey, Array>} A complete ordered plan 
+ * @param {any} agenda
+ * @returns {Map<PropertyKey, Array>} A complete ordered plan
  */
 function POP(plan, agenda) {
-  
-  let isEqual = (Q, effect, B) => {
-    // Q right now is a literal, but it needs more context to work with a binding
-    if (B.length === 0) {
-      // We don't need to test bindings, just compare Q and effect
-      // TODO: This probably won't work, but wanted to have an example up
-      return Q === effect
-    } else {
-      
-      for (binding of B) {
-        // Test if binding matches. If it does, we need to apply it to 
-        Q = testBinding(binding) ? applyBinding(binding, Q) : Q;
-      }
-      return Q === effect
-    }
-  }
-
-  /**
-   * Given Q, selects an action from the set of AOLArray and actions.
-   * @param {any} Q
-   * @param {any} AOLArray
-   * @param {any} actions
-   * @returns {any} 'aAdd' an action
-   */
-  let chooseAction = (Q, AOLArray, actions, B = []) => {
-    // Weld states that action can be chosen from either the array of actions
-    // or the AOLArray, but does not give any guidance as to how the action
-    // should be selected. I'm going for a super naive, actions array-first approach
-    let allActions = actions.concat(AOLArray);
-    
-    for (let aAdd of allActions) {
-      // The choice of aAdd must consider all new & existing actions, such that 
-      // one of aAdd's effects unifies with the goal given the plan's codesignation constraints
-      
-      for (effect of aAdd.effects) {
-      // TODO: the value equality comparison b/w Q and aAdd will likely have to change,
-      // given the structure of effects e.g, { operation: 'and', action: 'on', parameters: [ 'b', 't2' ] }
-        if (isEqual(Q, aAdd.effect, B)) {
-          return aAdd;
-      }
-      }
-    }
-    // If there is no action that can satisfy Q in either array, we return a failure
-    throw Error("no action matches Q, failure");
-  };
-
   // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
   // if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
   // and before the goal step (aInf)
@@ -305,30 +433,29 @@ function POP(plan, agenda) {
     }
     return newOrderingConstraints;
   };
+  let variableBindings;
 
   // 1. If agenda is empty return <A, O, L>
-  // We need to ensure that initial state contains no variable bindings, and all variables mentioned 
+  // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator
   if (agenda.length === 0) {
     return plan;
   } else {
     // 2. Goal selection
     // we choose an item in the agenda. right now we're selecting the first item
-    // but it doesn't need to be. It's destructured into Q which is a constant, and 
-    // `aNeed` which 
+    // but it doesn't need to be. It's destructured into Q which is a constant, and
+    // `aNeed` which
     let { q, aNeed } = agenda[0];
 
     // 3. Action selection
-    let aAdd = chooseAction(q, plan, actions);
+    let aAdd,
+      newBindingConstraints = chooseAction(q, plan, actions);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
-    let linksPrime = updateCausalLinks(plan.links);
-    let orderConstrPrime = updateOrderingConstraints(
-      aAdd,
-      aNeed,
-      plan
-    );
+    let linksPrime = updateCausalLinks(plan.links, aAdd);
+    let orderConstrPrime = updateOrderingConstraints(aAdd, aNeed, plan);
     let actionsPrime = plan.actions.concat(aAdd);
+    // TODO: I need to create more bindings here as well
 
     // 4. Update the goal set
     let agendaPrime = agenda.splice(0, 1);
@@ -337,11 +464,8 @@ function POP(plan, agenda) {
     // add <Qi, aAdd> to the agenda
     // In other words, if aAdd.name is not in plan, we add each of
     // its preconditions to the agenda
-    if (
-      plan.actions.find((x) => x.name === aAdd.name) ==
-      null
-    ) {
-      // This is deterministic (as long as the order of .preconditions doesn't change)
+    if (plan.actions.find((x) => x.name === aAdd.name) === null) {
+      // This is deterministic (as long as the order of preconditions doesn't change)
       // but this is another thing that could possibly be ordered explicitly
       agendaPrime.push(aAdd.preconditions);
     }
@@ -351,9 +475,13 @@ function POP(plan, agenda) {
 
     // 6. recursive invocation
     POP(
-      { actions: actionsPrime, order: orderConstrPrime, links: linksPrime, variableBindings: null },
+      {
+        actions: actionsPrime,
+        order: orderConstrPrime,
+        links: linksPrime,
+        variableBindings: variableBindings,
+      },
       agendaPrime
     );
   }
 }
-
