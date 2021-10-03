@@ -69,7 +69,7 @@ test("MGU returns most general unifier for move action successfully", () => {
 
 const badQ = { operation: "and", action: "on", parameters: ["C", "C"] }
 test("MGU throws error that most general unifier can't be found because of binding constraints", () => {
-  expect(pocl.MGU(badQ, R, bindings)).toThrow(pocl.NoUnifierException);
+  expect(() => pocl.MGU(badQ, R, bindings)).toThrow();
 })
 
 test("checkBindings returns false when bindings conflict with Q", () => {
