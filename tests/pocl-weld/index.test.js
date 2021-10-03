@@ -72,6 +72,8 @@ test("MGU throws error that most general unifier can't be found because of bindi
   expect(() => pocl.MGU(badQ, R, bindings)).toThrow();
 })
 
+const qrPairs = pocl.zip(R,badQ)
+const qrMaps = qrPairs.map((x) => new Map().set(x[0], x[1]));
 test("checkBindings returns false when bindings conflict with Q", () => {
-  expect(pocl.checkBindings(bindings[2], R, badQ)).toBe(false);
+  expect(pocl.checkBindings(bindings[2], qrPairs, qrMaps)).toBe(false);
 })

@@ -107,20 +107,20 @@ let createBindingConstraint = function createBindingConstraintFromLiterals(
 
 module.exports.createBindingConstraint = createBindingConstraint;
 
-let checkBindings = function checkBindingsForConflict(binding, effect, Q) {
-  // binding each parameter with each value
-  qPairs = zip(effect.parameters, Q.parameters);
-
+let checkBindings = function checkBindingsForConflict(
+  binding,
+  argumentPairs,
+  argumentMaps
+) {
   // If it's an equals binding, we need to make sure that the value within the binding linked to the
   // operator's parameter is resolvable to our chosen parameters
   if (binding.equal) {
     // If the assignee is capitalized, then we want to make sure that the variable it's set
     // equal to is the same as the variable tied to it in qPairs
     if (binding.assignee.charCodeAt(0) < 96) {
-      let qBinding = qPairs.filter(
+      let qBinding = argumentPairs.filter(
         (x) => x[0] === binding.assignee || x[1] === binding.assignee
       );
-
       // If the binding pair and the binding scenario are equal, then there is no coflict and we can return true
       // Otherwise we return false
       return pairMatch([binding.assignor, binding.assignee], qBinding[0]);
@@ -132,7 +132,7 @@ let checkBindings = function checkBindingsForConflict(binding, effect, Q) {
     // else binding is not equal (noncodesignation constraint)
   } else {
     if (binding.assignee.charCodeAt(0) < 96) {
-      let qBinding = qPairs.filter(
+      let qBinding = argumentPairs.filter(
         (x) => x[0] === binding.assignee || x[1] === binding.assignee
       );
 
@@ -140,24 +140,19 @@ let checkBindings = function checkBindingsForConflict(binding, effect, Q) {
       // If it's not a capital letter, then it must be some variable binding
       // (e.g., {equal: false,  assignor: 'p1',  assignee: 'p2'})
     } else {
-      // These are variable bindings as maps e.g., {b1: 'C'}
-      let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
-
-      // If each of the binding variables is within qMaps, we'll look to see that the literals
+      // If each of the binding variables is within argumentMaps, we'll look to see that the literals
       // they equal arent the same.
       // TODO: What do i do if it's a variable from something in A?
       // TODO: What if it's not in Q or R?
-      let assignorKV = qMaps.filter(
-        (x) => x.get(binding.assignor) !== undefined
-      )[0];
-      let assigneeKV = qMaps.filter(
-        (x) => x.get(binding.assignee) !== undefined
-      )[0];
+      let assignorKV =
+        argumentMaps.filter((x) => x.get(binding.assignor) !== undefined)[0] ||
+        new Map();
+      let assigneeKV =
+        argumentMaps.filter((x) => x.get(binding.assignee) !== undefined)[0] ||
+        new Map();
       let assignorValue = assignorKV.get(binding.assignor);
       let assigneeValue = assigneeKV.get(binding.assignee);
-      if (assignorValue && assigneeValue) {
-        return assignorValue !== assigneeValue;
-      }
+      return assignorValue !== assigneeValue;
     }
   }
 };
@@ -165,26 +160,26 @@ let checkBindings = function checkBindingsForConflict(binding, effect, Q) {
 module.exports.checkBindings = checkBindings;
 
 /**
- * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B
+ * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B.
+ * So if Q has parameters: ['b', 'c'], and R has parameters: ['p1', 'p2'], and variable bindings are: [],
+ * we would return: ['b', 'c']
  * @param {any} Q Literal - first portion of an agenda that needs to be satisfied
  * @param {any} R Literal - likely an effect of an action
  * @param {any} B Vector of (non)codedesignation constraints
  * @returns {any} Most general unifier of literals or false
  */
 let MGU = function findMostGenerialUnifier(Q, R, B) {
-  // So if Q is:
-  // { operation: '', action: 'on', parameters: ['b', 'c']}
-  // and R is
-  // { operation: '', action: 'on', parameters: ['p1', 'p2']}
-  // And variable bindings are: []
-  // We could return:
-  // ['b', 'c']
-
   // For the most general unifier, let's just assume Q's parameters
   /** @type {Array} */
   let QArgs = Q.parameters;
-  // Step one: apply valid variable bindings
-  // Step two: compare Q and R
+
+  // binding each parameter with each value
+  let qPairs = zip(R.parameters, Q.parameters);
+
+  // These are variable bindings as maps e.g., {b1: 'C'}
+  let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
+
+  // If we have any bindings, we can evaluate them against Q and R's parameters
   if (B.length > 0) {
     for (binding of B) {
       // If any binding parameters are equal to any of Q's or the effects parameters, we will evaluate
@@ -199,7 +194,7 @@ let MGU = function findMostGenerialUnifier(Q, R, B) {
         binding.assignor === R.parameters[0] ||
         binding.assignor === R.parameters[1]
       ) {
-        if (checkBindings(binding, R, Q)) {
+        if (checkBindings(binding, qPairs, qMaps)) {
           continue;
         } else {
           throw NoUnifierException(Q);
@@ -207,8 +202,7 @@ let MGU = function findMostGenerialUnifier(Q, R, B) {
       }
     }
   }
-
-  return QArgs;
+  return qPairs;
 };
 module.exports.MGU = MGU;
 
