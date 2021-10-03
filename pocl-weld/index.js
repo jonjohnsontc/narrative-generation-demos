@@ -30,6 +30,8 @@ const NoUnifierException = (literal) => {
   };
 };
 
+module.exports.NoUnifierException = NoUnifierException;
+
 /**
  * Returns true if the vector pair a matches the vector pair b
  * @param {Array} a
@@ -105,6 +107,63 @@ let createBindingConstraint = function createBindingConstraintFromLiterals(
 
 module.exports.createBindingConstraint = createBindingConstraint;
 
+let checkBindings = function checkBindingsForConflict(binding, effect, Q) {
+  // binding each parameter with each value
+  qPairs = zip(effect.parameters, Q.parameters);
+
+  // If it's an equals binding, we need to make sure that the value within the binding linked to the
+  // operator's parameter is resolvable to our chosen parameters
+  if (binding.equal) {
+    // If the assignee is capitalized, then we want to make sure that the variable it's set
+    // equal to is the same as the variable tied to it in qPairs
+    if (binding.assignee.charCodeAt(0) < 96) {
+      let qBinding = qPairs.filter(
+        (x) => x[0] === binding.assignee || x[1] === binding.assignee
+      );
+
+      // If the binding pair and the binding scenario are equal, then there is no coflict and we can return true
+      // Otherwise we return false
+      return pairMatch([binding.assignor, binding.assignee], qBinding[0]);
+    } else {
+      // to my knowledge, there shouldn't be equal bindings between variable names
+      // if there is, I should figure out the right way to handle them
+      throw Error(`Invalid Binding, ${binding}`);
+    }
+    // else binding is not equal (noncodesignation constraint)
+  } else {
+    if (binding.assignee.charCodeAt(0) < 96) {
+      let qBinding = qPairs.filter(
+        (x) => x[0] === binding.assignee || x[1] === binding.assignee
+      );
+
+      return !pairMatch([binding.assignor, binding.assignee], qBinding[0]);
+      // If it's not a capital letter, then it must be some variable binding
+      // (e.g., {equal: false,  assignor: 'p1',  assignee: 'p2'})
+    } else {
+      // These are variable bindings as maps e.g., {b1: 'C'}
+      let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
+
+      // If each of the binding variables is within qMaps, we'll look to see that the literals
+      // they equal arent the same.
+      // TODO: What do i do if it's a variable from something in A?
+      // TODO: What if it's not in Q or R?
+      let assignorKV = qMaps.filter(
+        (x) => x.get(binding.assignor) !== undefined
+      )[0];
+      let assigneeKV = qMaps.filter(
+        (x) => x.get(binding.assignee) !== undefined
+      )[0];
+      let assignorValue = assignorKV.get(binding.assignor);
+      let assigneeValue = assigneeKV.get(binding.assignee);
+      if (assignorValue && assigneeValue) {
+        return assignorValue !== assigneeValue;
+      }
+    }
+  }
+};
+
+module.exports.checkBindings = checkBindings;
+
 /**
  * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B
  * @param {any} Q Literal - first portion of an agenda that needs to be satisfied
@@ -121,47 +180,9 @@ let MGU = function findMostGenerialUnifier(Q, R, B) {
   // We could return:
   // ['b', 'c']
 
-  // Since R could potentially be modified by binding constraints, we'll make a copy of it inside of a vector
-  // The vector will hold all of the variable contstraints, either positioned before or after R
-  let RCopy = [{ ...R }];
-
   // For the most general unifier, let's just assume Q's parameters
   /** @type {Array} */
   let QArgs = Q.parameters;
-  let checkBindings = function checkBindingsForConflict(binding, effect, Q) {
-    // binding each parameter with each value
-    qPairs = zip(effect.parameters, Q.parameters);
-
-    // If it's an equals binding, we need to make sure that the value within the binding linked to the
-    // operator's parameter is resolvable to our chosen parameters
-    if (binding.equal) {
-      // If the assignee is capitalized, then we want to make sure that the variable it's set
-      // equal to is the same as the variable tied to it in qPairs
-      if (binding.assignee.charCodeAt(0) < 96) {
-        let qBinding = qPairs.filter(x => x[0] === binding.assignee || x[1] === binding.assignee);
-        
-        // If the binding pair and the binding scenario are equal, then there is no coflict and we can return true
-        // Otherwise we return false
-        return pairMatch([binding.assignor, binding.assignee], qBinding[0])
-      } else {
-        // to my knowledge, there shouldn't be equal bindings between variable names
-        // if there is, I should figure out the right way to handle them
-        throw Error(`Invalid Binding, ${binding}`)
-      }
-      // else binding is not equal (noncodesignation constraint)
-    } else {
-      if (binding.assignee.charCodeAt(0) < 96) {
-        let qBinding = qPairs.filter(x => x[0] === binding.assignee || x[1] === binding.assignee);
-
-        return !pairMatch([binding.assignor, binding.assignee], qBinding[0])
-      } else {
-        // We're going to look at the variable pairs and make sure that they aren't equal
-        // TODO: What do i do if it's a variable from something in A? 
-        // TODO: Would it ever be something not in Q or R?
-        let vBinding = "";
-      }
-    }
-  };
   // Step one: apply valid variable bindings
   // Step two: compare Q and R
   if (B.length > 0) {
@@ -171,23 +192,23 @@ let MGU = function findMostGenerialUnifier(Q, R, B) {
       if (
         binding.assignee === QArgs[0] ||
         binding.assignee === QArgs[1] ||
-        binding.assignee === effect.parameters[0] ||
-        binding.assignee === effect.parameters[1] ||
+        binding.assignee === R.parameters[0] ||
+        binding.assignee === R.parameters[1] ||
         binding.assignor === QArgs[0] ||
         binding.assignor === QArgs[1] ||
-        binding.assignor === effect.parameters[0] ||
-        binding.assignor === effect.parameters[1]
+        binding.assignor === R.parameters[0] ||
+        binding.assignor === R.parameters[1]
       ) {
         if (checkBindings(binding, R, Q)) {
-          continue
+          continue;
         } else {
-          throw NoUnifierException(Q)
+          throw NoUnifierException(Q);
         }
       }
     }
   }
 
-  return QArgs
+  return QArgs;
 };
 module.exports.MGU = MGU;
 
