@@ -107,6 +107,22 @@ let createBindingConstraint = function createBindingConstraintFromLiterals(
 
 module.exports.createBindingConstraint = createBindingConstraint;
 
+/**
+ * Creates binding constraint from a unifier
+ * @param {Map} unifier
+ * @returns {any}
+ */
+let createBindConstrFromUnifier = function createBindingConstraintFromUnifiers(unifier) {
+  
+  // we can unpack the unifier by calling entries and next, since it should only be one k,v pair
+  let [assignor, assignee] = unifier.entries().next().value;
+  
+  // A binding contstraint from unifiers is always true, because unifiers are always equal
+  return createBindingConstraint(assignor, assignee, true)
+}
+
+module.exports.createBindConstrFromUnifier = createBindConstrFromUnifier;
+
 let checkBindings = function checkBindingsForConflict(
   binding,
   argumentPairs,
@@ -202,7 +218,7 @@ let MGU = function findMostGenerialUnifier(Q, R, B) {
       }
     }
   }
-  return qPairs;
+  return qMaps;
 };
 module.exports.MGU = MGU;
 
@@ -277,23 +293,21 @@ let chooseAction = function findActionThatSatisfiesQ(
   for (let aAdd of allActions) {
     // The choice of aAdd must consider all new & existing actions, such that
     // one of aAdd's effects unifies with the goal given the plan's codesignation constraints
-    for (let effect of aAdd.effects) {
+    for (let effect of aAdd.effect) {
       // If an effect matches the `action` Q, that means we have a match, and can perform
       // MGU to ensure we have a matching set of arguments/parameters
-      let unifiers, newBindingConstraints;
       if (Q.action === effect.action && Q.operation === effect.operation) {
         try {
-          unifiers = MGU(Q, effect, B, A);
-          newBindingConstraints = createBindingConstraint(unifiers);
+          let unifiers = MGU(Q, effect, B);
+          let newBindingConstraints = unifiers.map(x => createBindConstrFromUnifier(x));
 
           // the action needs to be returned to add to A
           // newConstraints need to be returned to be added to B
-          return aAdd, newBindingConstraints;
+          return {action: aAdd, bindingConstraints: newBindingConstraints};
         } catch (error) {
           // If MGU doesn't work, we should break out of the action, and into the next one
           // TODO: I don't know if this will work
           console.log(error);
-
           break;
         }
       } else {
@@ -304,6 +318,8 @@ let chooseAction = function findActionThatSatisfiesQ(
     throw Error("no action matches Q, failure");
   }
 };
+
+module.exports.chooseAction = chooseAction;
 
 // Here is an example action:
 // {

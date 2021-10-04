@@ -56,6 +56,12 @@ test("createBindingConstraint returns expected binding constraint", () => {
   );
 });
 
+const expectedBindingConstraintFromUnifer = { equal: true, assignor: 'a1', assignee:  'C' }
+const unifier = new Map().set('a1', 'C');
+test("createBindConstrFromUnifier creates expected binding constraint from unifier", () => {
+  expect(pocl.createBindConstrFromUnifier(unifier)).toEqual(expectedBindingConstraintFromUnifer)
+})
+
 const Q = { operation: "and", action: "on", parameters: ["C", "D"] };
 const R = { operation: "and", action: "on", parameters: ["a1", "a2"] };
 const bindings = [
@@ -63,8 +69,12 @@ const bindings = [
   { equal: false, assignor: "a2", assignee: "C" },
   { equal: false, assignor: "a1", assignee: "a2"}
 ];
+const expectedUnifiers = [
+  new Map().set('a1', 'C'),
+  new Map().set('a2', 'D')
+]
 test("MGU returns most general unifier for move action successfully", () => {
-  expect(pocl.MGU(Q, R, bindings)).toEqual(["C", "D"]);
+  expect(pocl.MGU(Q, R, bindings)).toEqual(expectedUnifiers);
 });
 
 const badQ = { operation: "and", action: "on", parameters: ["C", "C"] }
@@ -76,4 +86,10 @@ const qrPairs = pocl.zip(R,badQ)
 const qrMaps = qrPairs.map((x) => new Map().set(x[0], x[1]));
 test("checkBindings returns false when bindings conflict with Q", () => {
   expect(pocl.checkBindings(bindings[2], qrPairs, qrMaps)).toBe(false);
+})
+
+const actionArray = parsed.blocksDomain.actions;
+const expectedAction = parsed.blocksDomain.actions[0];
+test("chooseAction selects action which satisfies binding constraints", () => {
+  expect(pocl.chooseAction(Q, [], actionArray, [])).toEqual({action: expectedAction, bindingConstraints: [{"assignee": "C", "assignor": "b", "equal": true}, {"assignee": "D", "assignor": "t2", "equal": true}]})
 })
