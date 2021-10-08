@@ -3,9 +3,29 @@
     "pegjs": "^0.10.0"
   },
   "devDependencies": {
-    "jest": "^27.2.1"
+    "@types/jest": "^27.0.2",
+    "jest": "^27.2.1",
+    "ts-jest": "^27.0.5",
+    "ts-node": "^10.2.1"
+  },
+  "jest": {
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!@ngrx|(?!deck.gl)|ng-dynamic)"
+    ],
+    "globals": {
+      "ts-jest": {
+        "useESM": true
+      }
+    },
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    }
   },
   "scripts": {
     "test": "jest"
-  }
+  },
+  "type": "module"
 }
