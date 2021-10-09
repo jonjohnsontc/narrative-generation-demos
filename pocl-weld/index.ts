@@ -1,13 +1,36 @@
 // Helper fn's are at the top, before POP. These are fn's that I haven't figured out if/how
 // they're used in partial order planning (POP), but I find helpful to illustrate in code
-import { blocksDomain, blocksProblem } from "../shared-libs/parser/parser"
+import { blocksDomain, blocksProblem } from "../shared-libs/parser/parser";
 
-// Type Declarations
-type variableBinding = {
-  equal: boolean,
-  assignor: string,
-  assignee: string
-}
+///////////////////////
+// Type Declarations //
+///////////////////////
+type VariableBinding = {
+  equal: boolean;
+  assignor: string;
+  assignee: string;
+};
+
+// i.e., q, a precondition or effect
+type Literal = {
+  operation: string;
+  action: string;
+  parameters: readonly string[];
+};
+
+// In `blocksDomain.actions` as parameter, a parameter to an action
+type ActionParameter = {
+  parameter: string;
+  type: string | null;
+  version: number;
+};
+
+type Action = {
+  action: string;
+  parameters: readonly ActionParameter[];
+  precondition: readonly Literal[];
+  effect: readonly Literal[];
+};
 
 // I have this in cpopl/script.js as well
 /**
@@ -24,6 +47,33 @@ export let zip = (array1, array2) => {
     pairs.push([array1[i], array2[i]]);
   }
   return pairs;
+};
+
+/**
+ * Increments variable parameters of the action passed through, and returns a copy of the original domain
+ * passed through, inclusive of the action with incremented variable parameters
+ * @param {Action[]} domain
+ * @param {Action} action
+ * @returns {Action[]} new domain with the updated action included
+ */
+export let updateVariables = function updateVariableBindingsGivenAction(
+  domain: Action[],
+  action: Action
+): Action[] {
+  let updateActionParameter = (param: ActionParameter) => {
+    return { version: param.version + 1, ...param };
+  };
+  let newActionParameters = action.parameters.map((x) =>
+    updateActionParameter(x)
+  );
+
+  let newAction = { parameters: newActionParameters, ...action };
+  let newDomain = [...domain];
+  let toReplaceLoc = newDomain.findIndex((x) => x.action === newAction.action);
+
+  newDomain.splice(toReplaceLoc, 1, newAction);
+
+  return newDomain;
 };
 
 // I was thinking about putting together some custom exception types like this
@@ -68,39 +118,39 @@ export const pairMatch = function doVectorPairsMatch(a, b) {
  * @param {boolean} equal true if the params should be set to equal, false if not
  * @returns {variableBinding}
  */
-export let createBindingConstraint = function createBindingConstraintFromLiterals(
-  assignor: string,
-  assignee: string,
-  equal: boolean
-): variableBinding {
-  // Making sure the assignor is not capitalized
-  if (assignor.charCodeAt(0) < 96) {
-    throw Error("Invalid assignor");
-  }
-  return {
-    equal: equal,
+export let createBindingConstraint =
+  function createBindingConstraintFromLiterals(
+    assignor: string,
+    assignee: string,
+    equal: boolean
+  ): VariableBinding {
+    // Making sure the assignor is not capitalized
+    if (assignor.charCodeAt(0) < 96) {
+      throw Error("Invalid assignor");
+    }
+    return {
+      equal: equal,
 
-    // This isn't a construct of POP from Weld, rather something I did to try and more easily
-    // differentiate constants from Q vs params from an operator
-    assignor: assignor,
-    assignee: assignee,
+      // This isn't a construct of POP from Weld, rather something I did to try and more easily
+      // differentiate constants from Q vs params from an operator
+      assignor: assignor,
+      assignee: assignee,
+    };
   };
-};
 
 /**
  * Creates binding constraint from a unifier
  * @param {Map} unifier
  * @returns {any}
  */
-export let createBindConstrFromUnifier = function createBindingConstraintFromUnifiers(
-  unifier
-) {
-  // we can unpack the unifier by calling entries and next, since it should only be one k,v pair
-  let [assignor, assignee] = unifier.entries().next().value;
+export let createBindConstrFromUnifier =
+  function createBindingConstraintFromUnifiers(unifier) {
+    // we can unpack the unifier by calling entries and next, since it should only be one k,v pair
+    let [assignor, assignee] = unifier.entries().next().value;
 
-  // A binding contstraint from unifiers is always true, because unifiers are always equal
-  return createBindingConstraint(assignor, assignee, true);
-};
+    // A binding contstraint from unifiers is always true, because unifiers are always equal
+    return createBindingConstraint(assignor, assignee, true);
+  };
 
 export let checkBindings = function checkBindingsForConflict(
   binding,
@@ -324,7 +374,7 @@ export let chooseAction = function findActionThatSatisfiesQ(
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
  * @param {Map<PropertyKey, Array>} plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
- * @param {any} agenda
+ * @param {Array} agenda
  * @returns {Map<PropertyKey, Array>} A complete ordered plan
  */
 function POP(plan, agenda) {
@@ -443,7 +493,7 @@ function POP(plan, agenda) {
     return plan;
   } else {
     // destructuring plan
-    let { actions, order, links, variableBindings } = plan;
+    let { actions, order, links, variableBindings, domain } = plan;
 
     // 2. Goal selection
     // we choose an item in the agenda. right now we're selecting the first item
@@ -453,7 +503,14 @@ function POP(plan, agenda) {
 
     // 3. Action selection
     // TODO: Where do I get domain from? Haven't come across a place in Weld
-    let { action, newBindingConstraints } = chooseAction(q, actions, domain, variableBindings);
+    let { action, newBindingConstraints } = chooseAction(
+      q,
+      actions,
+      domain,
+      variableBindings
+    );
+
+    let domainPrime = updateVariables(domain, action);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = updateCausalLinks(links, action, q);
@@ -465,14 +522,23 @@ function POP(plan, agenda) {
     // TODO: I need to create more bindings here as well
 
     // 4. Update the goal set
-    let agendaPrime = agenda.splice(0, 1);
+    let agendaPrime = agenda.slice(1);
 
     // If aAdd is newly instantiated, then for each conjunct Qi, of its precondition,
-    // add <Qi, aAdd> to the agenda
-    // In other words, if aAdd.name is not in plan, we add each of
-    // its preconditions to the agenda
-    // TODO: This probably doesn't work,
-    if (plan.actions.find((x) => x.name === action.name) === null) {
+    // add <Qi, aAdd> to the agenda.
+    // i.e., if aAdd.name is not in plan, we add each of its preconditions to the agenda
+    if (
+      actions.find(
+        (a: Action) =>
+          a.action === action.action &&
+          a.parameters[0]["parameter"] === action.parameters[0]["parameter"] &&
+          a.parameters[0]["version"] === action.parameters[0]["version"]
+      ) !== undefined
+    ) {
+      // filter out noncodedesignation constraints from preconditions
+
+      // add noncodedesignation constraints to bindingConstraintsPrime
+
       // This is deterministic (as long as the order of preconditions doesn't change)
       // but this is another thing that could possibly be ordered explicitly
       agendaPrime.push(action.preconditions);
@@ -488,6 +554,7 @@ function POP(plan, agenda) {
         order: orderConstrPrime,
         links: linksPrime,
         variableBindings: bindingConstraintsPrime,
+        domain: domainPrime,
       },
       agendaPrime
     );

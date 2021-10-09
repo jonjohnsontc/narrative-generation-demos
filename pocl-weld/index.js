@@ -10,8 +10,17 @@ var __assign = (this && this.__assign) || function () {
     };
     return __assign.apply(this, arguments);
 };
+var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
+    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+        if (ar || !(i in from)) {
+            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+            ar[i] = from[i];
+        }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
+};
 exports.__esModule = true;
-exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.zip = void 0;
+exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.updateVariables = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -28,6 +37,27 @@ var zip = function (array1, array2) {
     return pairs;
 };
 exports.zip = zip;
+/**
+ * Increments variable parameters of the action passed through, and returns a copy of the original domain
+ * passed through, inclusive of the action with incremented variable parameters
+ * @param {Action[]} domain
+ * @param {Action} action
+ * @returns {Action[]} new domain with the updated action included
+ */
+var updateVariables = function updateVariableBindingsGivenAction(domain, action) {
+    var updateActionParameter = function (param) {
+        return __assign({ version: param.version + 1 }, param);
+    };
+    var newActionParameters = action.parameters.map(function (x) {
+        return updateActionParameter(x);
+    });
+    var newAction = __assign({ parameters: newActionParameters }, action);
+    var newDomain = __spreadArray([], domain, true);
+    var toReplaceLoc = newDomain.findIndex(function (x) { return x.action === newAction.action; });
+    newDomain.splice(toReplaceLoc, 1, newAction);
+    return newDomain;
+};
+exports.updateVariables = updateVariables;
 // I was thinking about putting together some custom exception types like this
 // Not using the Error object, which I'm not sure is good or bad: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/Error
 var NoUnifierException = function (literal) {
@@ -417,7 +447,7 @@ function POP(plan, agenda) {
     }
     else {
         // destructuring plan
-        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings;
+        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings, domain = plan.domain;
         // 2. Goal selection
         // we choose an item in the agenda. right now we're selecting the first item
         // but it doesn't need to be. It's destructured into Q which is a constant, and
@@ -426,6 +456,7 @@ function POP(plan, agenda) {
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
         var _b = (0, exports.chooseAction)(q, actions, domain, variableBindings), action_1 = _b.action, newBindingConstraints = _b.newBindingConstraints;
+        var domainPrime = (0, exports.updateVariables)(domain, action_1);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
         var linksPrime = updateCausalLinks(links, action_1, q);
         var orderConstrPrime = updateOrderingConstraints(action_1, aNeed, plan);
@@ -451,7 +482,8 @@ function POP(plan, agenda) {
             actions: actionsPrime,
             order: orderConstrPrime,
             links: linksPrime,
-            variableBindings: bindingConstraintsPrime
+            variableBindings: bindingConstraintsPrime,
+            domain: domainPrime
         }, agendaPrime);
     }
 }

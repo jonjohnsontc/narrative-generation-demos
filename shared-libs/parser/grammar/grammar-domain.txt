@@ -93,7 +93,7 @@ parametersTyped = space* ":parameters" delimiter+ params:parameterTyped+ delimit
 { return params; }
  
 parameterTyped = "?" param:word space* type:type?
-{ return { parameter: param.join('').replace(/[,:? ]/g, ''), type: type }; }
+{ return { parameter: param.join('').replace(/[,:? ]/g, ''), type: type , version: 0 }; }
 
 type = "-" space* name:word space*
 { return name.join('').replace(/[,:? ]/g, ''); }

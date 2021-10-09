@@ -1,5 +1,5 @@
-const pocl = require("../../pocl-weld/index")
-const parsed = require("../../shared-libs/parser/parser")
+const pocl = require("../../pocl-weld/index");
+const parsed = require("../../shared-libs/parser/parser");
 // Opening state actions
 const actions = parsed.blocksProblem.states[0].actions;
 
@@ -16,7 +16,7 @@ const array1 = ["a", "b", "c", "d", "e"];
 const array2 = ["1", "2", "3", "4", "5"];
 const expectedArray = [
   ["a", "1"],
-  ["b", "2"], 
+  ["b", "2"],
   ["c", "3"],
   ["d", "4"],
   ["e", "5"],
@@ -95,4 +95,20 @@ test("chooseAction selects action which satisfies binding constraints", () => {
       { assignee: "D", assignor: "t2", equal: true },
     ],
   });
+});
+
+const expectedActionParameters = [
+  { parameter: "b", type: null, version: 1 },
+  { parameter: "t1", type: null, version: 1 },
+  { parameter: "t2", type: null, version: 1 },
+];
+const expectedDomain = [...parsed.blocksDomain.actions];
+expectedDomain.splice(0, 1, {
+  parameters: expectedActionParameters,
+  ...expectedAction,
+});
+test("updateVariables increments action parameters, and includes action in returned domain", () => {
+  expect(
+    pocl.updateVariables(parsed.blocksDomain.actions, expectedAction)
+  ).toEqual(expectedDomain);
 });
