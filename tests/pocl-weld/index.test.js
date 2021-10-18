@@ -53,7 +53,7 @@ test("createBindingConstraint returns expected binding constraint", () => {
 const expectedBindingConstraintFromUnifer = {
   equal: true,
   assignor: "a1",
-  assignee: "C",
+  assignee: "C", 
 };
 const unifier = new Map().set("a1", "C");
 test("createBindConstrFromUnifier creates expected binding constraint from unifier", () => {
@@ -107,8 +107,10 @@ expectedDomain.splice(0, 1, {
   parameters: expectedActionParameters,
   ...expectedAction,
 });
-test("updateVariables increments action parameters, and includes action in returned domain", () => {
+test("modifyAction increments action parameters, and includes action in returned domain", () => {
   expect(
-    pocl.updateVariables(parsed.blocksDomain.actions, expectedAction)
+    pocl.modifyAction(parsed.blocksDomain.actions, expectedAction)
   ).toEqual(expectedDomain);
 });
+
+

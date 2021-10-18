@@ -38,7 +38,7 @@ objectName = name:alphanum space*
 state = space* delimiter* ":" name:word space* delimiter* actions:logic*
 { return { name: name.join('').replace(/[,:? ]/g, ''), actions: actions }; }
  
-logic = operation:logicOp* delimiter* action:word space* params:parameter* delimiter*
+logic = operation:logicOp* delimiter* action:word space* params:parameterTyped* delimiter*
 { return { operation: operation.join('').replace(/[,:? ]/g, ''), action: action.join('').replace(/[,:? ]/g, ''), parameters: params }; }
  
 boolean   = "#t" / "#f"
@@ -55,3 +55,19 @@ comment   = ";" [a-zA-Z0-9\_\-\;\?\.\:\!\@\#\$\%\^\&\*\~\(\)\[\]\{\}\'\"\<\>\,\/
  
 parameter = param:word space*
 { return param.join('').replace(/[,:? ]/g, ''); }
+
+/* 
+These were added from grammar-domain for parameters - slightly adjusted
+*/
+
+parameters = space* ":parameters" delimiter+ params:parameter+ delimiter space*
+{ return params; }
+
+parametersTyped = space* ":parameters" delimiter+ params:parameterTyped+ delimiter space*
+{ return params; }
+
+parameterTyped = param:word space* type:type?
+{ return { parameter: param.join('').replace(/[,:? ]/g, ''), type: type , version: null }; }
+
+type = "-" space* name:word space*
+{ return name.join('').replace(/[,:? ]/g, ''); }

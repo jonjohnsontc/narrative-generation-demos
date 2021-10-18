@@ -1,6 +1,6 @@
 "use strict";
 exports.__esModule = true;
-exports.blocksProblem = exports.blocksDomain = void 0;
+exports.weldProblem = exports.weldDomain = exports.blocksProblem = exports.blocksDomain = void 0;
 var pegjs_1 = require("pegjs");
 var fs = require("fs");
 // All of the following code has been taken, and possibly modified
@@ -30,3 +30,5 @@ var loadDomain = function (grammarFileName) {
 // Sussman Anomaly 
 exports.blocksDomain = loadDomain("strips/examples/blocksworld5/domain.txt");
 exports.blocksProblem = loadProblem("strips/examples/blocksworld5/problem.txt");
+exports.weldDomain = loadDomain("shared-libs/parser/problems/sussman-weld/domain.txt");
+exports.weldProblem = loadProblem("shared-libs/parser/problems/sussman-weld/problem.txt");

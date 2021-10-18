@@ -32,3 +32,5 @@ let loadDomain = (grammarFileName) => {
 // Sussman Anomaly 
 export const blocksDomain = loadDomain("strips/examples/blocksworld5/domain.txt");
 export const blocksProblem = loadProblem("strips/examples/blocksworld5/problem.txt");
+export const weldDomain = loadDomain("shared-libs/parser/problems/sussman-weld/domain.txt");
+export const weldProblem = loadProblem("shared-libs/parser/problems/sussman-weld/problem.txt");

@@ -1,0 +1,8 @@
+(define (domain sussman-world)
+  (:requirements :strips)
+  (:action move
+    :parameters   (?b ?x ?y)
+    :precondition (and (on ?b ?x) (clear ?b) (clear ?y)
+                    (neq ?b ?x) (neq ?b ?y) (neq ?x ?y) (neq ?y ?table))
+    :effect       (and (on ?b ?y) (not (on ?b ?x))
+                    (clear ?x) (not (clear ?y)))))

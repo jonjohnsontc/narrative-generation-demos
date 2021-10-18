@@ -1,5 +1,3 @@
-// Helper fn's are at the top, before POP. These are fn's that I haven't figured out if/how
-// they're used in partial order planning (POP), but I find helpful to illustrate in code
 import { blocksDomain, blocksProblem } from "../shared-libs/parser/parser";
 
 ///////////////////////
@@ -7,31 +5,42 @@ import { blocksDomain, blocksProblem } from "../shared-libs/parser/parser";
 ///////////////////////
 type VariableBinding = {
   equal: boolean;
-  assignor: string;
-  assignee: string;
+  assignor: Parameter;
+  assignee: Parameter;
 };
 
 // i.e., q, a precondition or effect
 type Literal = {
   operation: string;
   action: string;
-  parameters: readonly string[];
+  parameters: readonly Parameter[];
 };
 
 // In `blocksDomain.actions` as parameter, a parameter to an action
-type ActionParameter = {
+type Parameter = {
   parameter: string;
   type: string | null;
-  version: number;
+  version: number | null;
 };
 
 type Action = {
   action: string;
-  parameters: readonly ActionParameter[];
+  parameters: readonly Parameter[];
   precondition: readonly Literal[];
   effect: readonly Literal[];
 };
 
+type CausalLink = {
+  // TODO: Would strings be better here?
+  createdBy: Action, // action effect
+  consumedBy: Action, // action precondition
+ 
+  // The preposition (or Q) needs to be a string representation of the effect/precondition
+  // shared by the creator and consumer.
+  preposition: Literal,
+}
+// Helper fn's are at the top, before POP. These are fn's that I haven't figured out if/how
+// they're used in partial order planning (POP), but I find helpful to illustrate in code
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -56,17 +65,18 @@ export let zip = (array1, array2) => {
  * @param {Action} action
  * @returns {Action[]} new domain with the updated action included
  */
-export let updateVariables = function updateVariableBindingsGivenAction(
+export let modifyAction = function cloneActionAndAddNewVariables(
   domain: Action[],
   action: Action
 ): Action[] {
-  let updateActionParameter = (param: ActionParameter) => {
+  // TODO: Forgot that I need to update the parameters in all of the precondition and effect Literal objects
+  let updateActionParameter = (param: Parameter) => {
     return { version: param.version + 1, ...param };
   };
   let newActionParameters = action.parameters.map((x) =>
     updateActionParameter(x)
   );
-
+  
   let newAction = { parameters: newActionParameters, ...action };
   let newDomain = [...domain];
   let toReplaceLoc = newDomain.findIndex((x) => x.action === newAction.action);
@@ -120,12 +130,12 @@ export const pairMatch = function doVectorPairsMatch(a, b) {
  */
 export let createBindingConstraint =
   function createBindingConstraintFromLiterals(
-    assignor: string,
-    assignee: string,
+    assignor: Parameter,
+    assignee: Parameter,
     equal: boolean
   ): VariableBinding {
     // Making sure the assignor is not capitalized
-    if (assignor.charCodeAt(0) < 96) {
+    if (assignor.parameter.charCodeAt(0) < 96) {
       throw Error("Invalid assignor");
     }
     return {
@@ -149,7 +159,7 @@ export let createBindConstrFromUnifier =
     let [assignor, assignee] = unifier.entries().next().value;
 
     // A binding contstraint from unifiers is always true, because unifiers are always equal
-    return createBindingConstraint(assignor, assignee, true);
+    return createBindingConstraint(assignor, assignee, true); 
   };
 
 export let checkBindings = function checkBindingsForConflict(
@@ -209,7 +219,7 @@ export let checkBindings = function checkBindingsForConflict(
  * @param {any} Q Literal - first portion of an agenda that needs to be satisfied
  * @param {any} R Literal - likely an effect of an action
  * @param {any} B Vector of (non)codedesignation constraints
- * @returns {any} Most general unifier of literals or false
+ * @returns {any} Most general unifier of literals
  */
 export let MGU = function findMostGenerialUnifier(Q, R, B) {
   // For the most general unifier, let's just assume Q's parameters
@@ -301,15 +311,14 @@ let verifyPreconditions = function checkAllPreconditions(
  * @returns {Object} An object containing an action, along with an array of binding constraints
  */
 export let chooseAction = function findActionThatSatisfiesQ(
-  Q,
-  actions,
-  domain,
-  B = []
-) {
+  Q: Literal,
+  actions: Action[],
+  domain: Action[],
+  B: VariableBinding[] | [] = []
+): {action: Action, newBindingConstraints: VariableBinding[]} {
   // Weld states that action can be chosen from either the array of actions
   // or the AOLArray, but does not give any guidance as to how the action
   // should be selected. I'm going for a super naive, actions array-first approach
-  /** @type {Array<Map<PropertyKey, Map<PropertyKey, Array>>>} */
   let allActions = domain.concat(actions);
 
   for (let aAdd of allActions) {
@@ -325,9 +334,14 @@ export let chooseAction = function findActionThatSatisfiesQ(
             createBindConstrFromUnifier(x)
           );
 
+          // We need to change the name of the action from it's generic name, to something that 
+          // captures the variables being used. So, we clone the Action and modify it's name
+          let newName = `${aAdd.action} - ${effect.parameters}`
+          let aAddNewName = {action: newName, ...aAdd}
+          
           // the action needs to be returned to add to A
           // newConstraints need to be returned to be added to B
-          return { action: aAdd, newBindingConstraints: newBindingConstraints };
+          return { action: aAddNewName, newBindingConstraints: newBindingConstraints };
         } catch (error) {
           // If MGU doesn't work, we should break out of the action, and into the next one
           // TODO: I don't know if this will work
@@ -378,6 +392,7 @@ export let chooseAction = function findActionThatSatisfiesQ(
  * @returns {Map<PropertyKey, Array>} A complete ordered plan
  */
 function POP(plan, agenda) {
+  
   // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
   // if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
   // and before the goal step (aInf)
@@ -385,19 +400,16 @@ function POP(plan, agenda) {
     let actions = AOLArray.actions.slice();
     let orderingConstraintPrime;
     if (actions.find((x) => (x.name === aAdd.name) == null)) {
-      // Find initial action
-      // TODO: Is this the best name for the first action?
-      let firstAction = actions.filter((x) => x.name === "first");
       // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
       // but given that assumption we create another constraint with name as first step
       // and tail as the new action
       let newConstraint = [
         {
           name: aAdd.name,
-          tail: AOLArray.actions[AOLArray.actions.length - 1],
+          tail: 'goal',
         },
         {
-          name: firstAction.name,
+          name: 'init',
           tail: aAdd.name,
         },
       ];
@@ -510,12 +522,11 @@ function POP(plan, agenda) {
       variableBindings
     );
 
-    let domainPrime = updateVariables(domain, action);
+    let domainPrime = modifyAction(domain, action);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = updateCausalLinks(links, action, q);
-    let orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
-    let actionsPrime = plan.actions.concat(action);
+    let orderConstrPrime = updateOrderingConstraints(action, aNeed, order);
     let bindingConstraintsPrime = variableBindings.concat(
       newBindingConstraints
     );
@@ -536,14 +547,17 @@ function POP(plan, agenda) {
       ) !== undefined
     ) {
       // filter out noncodedesignation constraints from preconditions
-
+      let nonCodeDesignationConstr = action.precondition.filter(lit => lit.action === 'neq');
       // add noncodedesignation constraints to bindingConstraintsPrime
-
+      bindingConstraintsPrime.push(nonCodeDesignationConstr);
       // This is deterministic (as long as the order of preconditions doesn't change)
       // but this is another thing that could possibly be ordered explicitly
-      agendaPrime.push(action.preconditions);
+      agendaPrime.push(action.precondition.filter(lit => lit.action !== 'neq'));
     }
 
+
+    let actionsPrime = plan.actions.concat(action);
+    
     // 5. causal link protection
     orderConstrPrime = checkForThreats(action, orderConstrPrime, linksPrime);
 
