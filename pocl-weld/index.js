@@ -177,17 +177,17 @@ exports.checkBindings = checkBindings;
  * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B.
  * So if Q has parameters: ['b', 'c'], and R has parameters: ['p1', 'p2'], and variable bindings are: [],
  * we would return: ['b', 'c']
- * @param {any} Q Literal - first portion of an agenda that needs to be satisfied
- * @param {any} R Literal - likely an effect of an action
+ * @param {Literal} Q Literal - first portion of an agenda that needs to be satisfied
+ * @param {Literal} R Literal - likely an effect of an action
  * @param {any} B Vector of (non)codedesignation constraints
  * @returns {any} Most general unifier of literals
  */
 var MGU = function findMostGenerialUnifier(Q, R, B) {
-    // For the most general unifier, let's just assume Q's parameters
-    /** @type {Array} */
+    if (B === void 0) { B = []; }
     var QArgs = Q.parameters;
     // binding each parameter with each value
     var qPairs = (0, exports.zip)(R.parameters, Q.parameters);
+    // TODOJON: Will have to adjust now that Literals have Parameters instead of just string values as params
     // These are variable bindings as maps e.g., {b1: 'C'}
     var qMaps = qPairs.map(function (x) { return new Map().set(x[0], x[1]); });
     // If we have any bindings, we can evaluate them against Q and R's parameters
@@ -196,14 +196,14 @@ var MGU = function findMostGenerialUnifier(Q, R, B) {
             var binding = B_1[_i];
             // If any binding parameters are equal to any of Q's or the effects parameters, we will evaluate
             // via `checkBindings`
-            if (binding.assignee === QArgs[0] ||
-                binding.assignee === QArgs[1] ||
-                binding.assignee === R.parameters[0] ||
-                binding.assignee === R.parameters[1] ||
-                binding.assignor === QArgs[0] ||
-                binding.assignor === QArgs[1] ||
-                binding.assignor === R.parameters[0] ||
-                binding.assignor === R.parameters[1]) {
+            if (binding.assignee.parameter === QArgs[0].parameter ||
+                binding.assignee.parameter === QArgs[1].parameter ||
+                binding.assignee.parameter === R.parameters[0].parameter ||
+                binding.assignee.parameter === R.parameters[1].parameter ||
+                binding.assignor.parameter === QArgs[0].parameter ||
+                binding.assignor.parameter === QArgs[1].parameter ||
+                binding.assignor.parameter === R.parameters[0].parameter ||
+                binding.assignor.parameter === R.parameters[1].parameter) {
                 if ((0, exports.checkBindings)(binding, qPairs, qMaps)) {
                     continue;
                 }
@@ -281,6 +281,9 @@ var chooseAction = function findActionThatSatisfiesQ(Q, actions, domain, B) {
             // MGU to ensure we have a matching set of arguments/parameters
             if (Q.action === effect.action && Q.operation === effect.operation) {
                 try {
+                    // Previously, I had broken this into two separate steps per Weld, where the unfiers coming from
+                    // MGU could then be converted into binding constraints. But, since a unifier can just be a VariableBinding
+                    // that is always set to true - I figured we could consolidate this
                     var unifiers = (0, exports.MGU)(Q, effect, B);
                     var newBindingConstraints = unifiers.map(function (x) {
                         return (0, exports.createBindConstrFromUnifier)(x);

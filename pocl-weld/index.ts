@@ -31,7 +31,7 @@ type Action = {
 };
 
 type CausalLink = {
-  // TODO: Would strings be better here?
+  // TODO: Would strings be better here? I'd basically like a reference to an action
   createdBy: Action, // action effect
   consumedBy: Action, // action precondition
  
@@ -216,19 +216,18 @@ export let checkBindings = function checkBindingsForConflict(
  * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B.
  * So if Q has parameters: ['b', 'c'], and R has parameters: ['p1', 'p2'], and variable bindings are: [],
  * we would return: ['b', 'c']
- * @param {any} Q Literal - first portion of an agenda that needs to be satisfied
- * @param {any} R Literal - likely an effect of an action
+ * @param {Literal} Q Literal - first portion of an agenda that needs to be satisfied
+ * @param {Literal} R Literal - likely an effect of an action
  * @param {any} B Vector of (non)codedesignation constraints
  * @returns {any} Most general unifier of literals
  */
-export let MGU = function findMostGenerialUnifier(Q, R, B) {
-  // For the most general unifier, let's just assume Q's parameters
-  /** @type {Array} */
+export let MGU = function findMostGenerialUnifier(Q: Literal, R: Literal, B: VariableBinding[] = []) {
   let QArgs = Q.parameters;
 
   // binding each parameter with each value
   let qPairs = zip(R.parameters, Q.parameters);
 
+  // TODOJON: Will have to adjust now that Literals have Parameters instead of just string values as params
   // These are variable bindings as maps e.g., {b1: 'C'}
   let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
 
@@ -238,14 +237,14 @@ export let MGU = function findMostGenerialUnifier(Q, R, B) {
       // If any binding parameters are equal to any of Q's or the effects parameters, we will evaluate
       // via `checkBindings`
       if (
-        binding.assignee === QArgs[0] ||
-        binding.assignee === QArgs[1] ||
-        binding.assignee === R.parameters[0] ||
-        binding.assignee === R.parameters[1] ||
-        binding.assignor === QArgs[0] ||
-        binding.assignor === QArgs[1] ||
-        binding.assignor === R.parameters[0] ||
-        binding.assignor === R.parameters[1]
+        binding.assignee.parameter === QArgs[0].parameter ||
+        binding.assignee.parameter === QArgs[1].parameter ||
+        binding.assignee.parameter === R.parameters[0].parameter ||
+        binding.assignee.parameter === R.parameters[1].parameter ||
+        binding.assignor.parameter === QArgs[0].parameter ||
+        binding.assignor.parameter === QArgs[1].parameter ||
+        binding.assignor.parameter === R.parameters[0].parameter ||
+        binding.assignor.parameter === R.parameters[1].parameter
       ) {
         if (checkBindings(binding, qPairs, qMaps)) {
           continue;
@@ -329,6 +328,9 @@ export let chooseAction = function findActionThatSatisfiesQ(
       // MGU to ensure we have a matching set of arguments/parameters
       if (Q.action === effect.action && Q.operation === effect.operation) {
         try {
+          // Previously, I had broken this into two separate steps per Weld, where the unfiers coming from
+          // MGU could then be converted into binding constraints. But, since a unifier can just be a VariableBinding
+          // that is always set to true - I figured we could consolidate this
           let unifiers = MGU(Q, effect, B);
           let newBindingConstraints = unifiers.map((x) =>
             createBindConstrFromUnifier(x)
