@@ -1,13 +1,22 @@
-// Helper fn's are at the top, before POP. These are fn's that I haven't figured out if/how
-// they're used in partial order planning (POP), but I find helpful to illustrate in code
-import { blocksDomain, blocksProblem } from "../shared-libs/parser/parser"
-
 // Type Declarations
 type variableBinding = {
   equal: boolean,
   assignor: string,
   assignee: string
 }
+
+type Literal = {
+  operation: string;
+  action: string;
+  parameters: readonly string[];
+};
+
+type Action = {
+  action: string;
+  parameters: readonly string[];
+  precondition: readonly Literal[];
+  effect: readonly Literal[];
+};
 
 // I have this in cpopl/script.js as well
 /**
@@ -25,6 +34,10 @@ export let zip = (array1, array2) => {
   }
   return pairs;
 };
+
+export let updateAction = function updateActionVariables(domain: Action[], action: Action) {
+  let updateActionParameter = ""
+}
 
 // I was thinking about putting together some custom exception types like this
 // Not using the Error object, which I'm not sure is good or bad: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/Error
@@ -443,7 +456,7 @@ function POP(plan, agenda) {
     return plan;
   } else {
     // destructuring plan
-    let { actions, order, links, variableBindings } = plan;
+    let { actions, order, links, variableBindings, domain } = plan;
 
     // 2. Goal selection
     // we choose an item in the agenda. right now we're selecting the first item
@@ -455,6 +468,8 @@ function POP(plan, agenda) {
     // TODO: Where do I get domain from? Haven't come across a place in Weld
     let { action, newBindingConstraints } = chooseAction(q, actions, domain, variableBindings);
 
+    let domainPrime  = updateAction(domain, action)
+    
     // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = updateCausalLinks(links, action, q);
     let orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
@@ -488,6 +503,7 @@ function POP(plan, agenda) {
         order: orderConstrPrime,
         links: linksPrime,
         variableBindings: bindingConstraintsPrime,
+        // TODOJON: Be sure to add domain here
       },
       agendaPrime
     );

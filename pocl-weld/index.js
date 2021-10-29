@@ -11,7 +11,7 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.zip = void 0;
+exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.updateAction = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -28,6 +28,10 @@ var zip = function (array1, array2) {
     return pairs;
 };
 exports.zip = zip;
+var updateAction = function updateActionVariables(domain, action) {
+    var updateActionParameter = ;
+};
+exports.updateAction = updateAction;
 // I was thinking about putting together some custom exception types like this
 // Not using the Error object, which I'm not sure is good or bad: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/Error
 var NoUnifierException = function (literal) {
@@ -417,7 +421,7 @@ function POP(plan, agenda) {
     }
     else {
         // destructuring plan
-        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings;
+        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings, domain = plan.domain;
         // 2. Goal selection
         // we choose an item in the agenda. right now we're selecting the first item
         // but it doesn't need to be. It's destructured into Q which is a constant, and
@@ -426,6 +430,7 @@ function POP(plan, agenda) {
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
         var _b = (0, exports.chooseAction)(q, actions, domain, variableBindings), action_1 = _b.action, newBindingConstraints = _b.newBindingConstraints;
+        var domainPrime = (0, exports.updateAction)(domain, action_1);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
         var linksPrime = updateCausalLinks(links, action_1, q);
         var orderConstrPrime = updateOrderingConstraints(action_1, aNeed, plan);
