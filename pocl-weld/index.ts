@@ -1,5 +1,3 @@
-import { blocksDomain, blocksProblem } from "../shared-libs/parser/parser";
-
 ///////////////////////
 // Type Declarations //
 ///////////////////////
@@ -7,16 +5,21 @@ type VariableBinding = {
   equal: boolean;
   assignor: Parameter;
   assignee: Parameter;
+
+  // This isn't part of weld, but allows us to filter by the value of the variable binding
+  // to easily check for duplicates
+  string: string;
 };
 
 // i.e., q, a precondition or effect
 type Literal = {
   operation: string;
   action: string;
-  parameters: readonly Parameter[];
+  parameters: readonly string[];
 };
 
-// In `blocksDomain.actions` as parameter, a parameter to an action
+// In strips.js: `blocksDomain.actions` as parameter, a parameter to an action
+// I've also modified an 'object' within 
 type Parameter = {
   parameter: string;
   type: string | null;
@@ -32,15 +35,13 @@ type Action = {
 
 type CausalLink = {
   // TODO: Would strings be better here? I'd basically like a reference to an action
-  createdBy: Action, // action effect
-  consumedBy: Action, // action precondition
- 
+  createdBy: Action; // action effect
+  consumedBy: Action; // action precondition
+
   // The preposition (or Q) needs to be a string representation of the effect/precondition
   // shared by the creator and consumer.
-  preposition: Literal,
-}
-// Helper fn's are at the top, before POP. These are fn's that I haven't figured out if/how
-// they're used in partial order planning (POP), but I find helpful to illustrate in code
+  preposition: Literal;
+};
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -61,22 +62,21 @@ export let zip = (array1, array2) => {
 /**
  * Increments variable parameters of the action passed through, and returns a copy of the original domain
  * passed through, inclusive of the action with incremented variable parameters
- * @param {Action[]} domain
- * @param {Action} action
- * @returns {Action[]} new domain with the updated action included
+ * @param domain
+ * @param action
+ * @returns new domain with the updated action included
  */
-export let modifyAction = function cloneActionAndAddNewVariables(
+export let updateAction = function cloneActionAndAddNewVariables(
   domain: Action[],
   action: Action
 ): Action[] {
-  // TODO: Forgot that I need to update the parameters in all of the precondition and effect Literal objects
   let updateActionParameter = (param: Parameter) => {
     return { version: param.version + 1, ...param };
   };
   let newActionParameters = action.parameters.map((x) =>
     updateActionParameter(x)
   );
-  
+
   let newAction = { parameters: newActionParameters, ...action };
   let newDomain = [...domain];
   let toReplaceLoc = newDomain.findIndex((x) => x.action === newAction.action);
@@ -121,12 +121,28 @@ export const pairMatch = function doVectorPairsMatch(a, b) {
   }
 };
 
+export let stringifyParam = function makeStringFromParameter(param: Parameter) {
+  return `${param.parameter}-${param.type}-${param.version}`;
+};
+
+export let stringifyVariableBinding = function makeStringFromVariableBinding(
+  assignor: Parameter,
+  assignee: Parameter,
+  equal: boolean
+) {
+  let assignorStr = stringifyParam(assignor);
+  let assigneeStr = stringifyParam(assignee);
+  let equalStr = equal ? "=" : "≠";
+
+  return `${assignorStr}${equalStr}${assigneeStr}`;
+};
+
 /**
  * Creates a binding constraint from the two params provided
- * @param {string} assignor A parameter from an operator
- * @param {string} assignee A parameter from an operator or param of Q
- * @param {boolean} equal true if the params should be set to equal, false if not
- * @returns {variableBinding}
+ * @param assignor A parameter from an operator
+ * @param assignee A parameter from an operator or param of Q
+ * @param equal true if the params should be set to equal, false if not
+ * @returns bindingConstraint
  */
 export let createBindingConstraint =
   function createBindingConstraintFromLiterals(
@@ -138,13 +154,16 @@ export let createBindingConstraint =
     if (assignor.parameter.charCodeAt(0) < 96) {
       throw Error("Invalid assignor");
     }
+
+    let stringVer = stringifyVariableBinding(assignor, assignee, equal)
     return {
       equal: equal,
-
-      // This isn't a construct of POP from Weld, rather something I did to try and more easily
-      // differentiate constants from Q vs params from an operator
       assignor: assignor,
       assignee: assignee,
+
+      // 'string' isn't a construct of POP from Weld, rather something I did to try and more easily
+      // differentiate constants from Q vs params from an operator
+      string: stringVer
     };
   };
 
@@ -159,8 +178,41 @@ export let createBindConstrFromUnifier =
     let [assignor, assignee] = unifier.entries().next().value;
 
     // A binding contstraint from unifiers is always true, because unifiers are always equal
-    return createBindingConstraint(assignor, assignee, true); 
+    return createBindingConstraint(assignor, assignee, true);
   };
+
+/**
+ * Creates a new array of binding constraints, and returns all current bindings along with any 
+ * new non-duplicated ones
+ * @param newBindings 
+ * @param currentBindings 
+ * @returns 
+ */
+export let updateBindingConstraints = function appendBindingConstraintsAndCheckForDuplicates(
+  newBindings: VariableBinding[],
+  currentBindings: VariableBinding[]
+): VariableBinding[] {
+  let appendedBindings = currentBindings.slice()
+  for (let newBinding of newBindings) {
+    if (currentBindings.filter(cb => cb.string === newBinding.string).length >= 1) {
+      continue
+    } else {    
+    } appendedBindings = currentBindings.concat(newBinding)
+  }
+  return appendedBindings
+}
+
+export let convertNDCToBC = function convertNonCodeDesignationConstrToBinding(NDC: Literal, action: Action): VariableBinding {
+  // pulling parameters in their Parameter format by querying for them in an action
+  let params = []
+  for (let litParam of NDC.parameters) {
+    let param = action.parameters.filter(x => x.parameter === litParam).pop()
+    params.push(param)
+  }
+
+  let newBindingConstraint = createBindingConstraint(params[0], params[1], false)
+  return newBindingConstraint
+}
 
 export let checkBindings = function checkBindingsForConflict(
   binding,
@@ -221,7 +273,11 @@ export let checkBindings = function checkBindingsForConflict(
  * @param {any} B Vector of (non)codedesignation constraints
  * @returns {any} Most general unifier of literals
  */
-export let MGU = function findMostGenerialUnifier(Q: Literal, R: Literal, B: VariableBinding[] = []) {
+export let MGU = function findMostGenerialUnifier(
+  Q: Literal,
+  R: Literal,
+  B: VariableBinding[] = []
+) {
   let QArgs = Q.parameters;
 
   // binding each parameter with each value
@@ -229,7 +285,10 @@ export let MGU = function findMostGenerialUnifier(Q: Literal, R: Literal, B: Var
 
   // TODOJON: Will have to adjust now that Literals have Parameters instead of just string values as params
   // These are variable bindings as maps e.g., {b1: 'C'}
-  let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
+  // let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
+  let qMaps = qPairs.map(pair =>
+    createBindingConstraint(pair[0], pair[1], true)
+  );
 
   // If we have any bindings, we can evaluate them against Q and R's parameters
   if (B.length > 0) {
@@ -237,14 +296,14 @@ export let MGU = function findMostGenerialUnifier(Q: Literal, R: Literal, B: Var
       // If any binding parameters are equal to any of Q's or the effects parameters, we will evaluate
       // via `checkBindings`
       if (
-        binding.assignee.parameter === QArgs[0].parameter ||
-        binding.assignee.parameter === QArgs[1].parameter ||
-        binding.assignee.parameter === R.parameters[0].parameter ||
-        binding.assignee.parameter === R.parameters[1].parameter ||
-        binding.assignor.parameter === QArgs[0].parameter ||
-        binding.assignor.parameter === QArgs[1].parameter ||
-        binding.assignor.parameter === R.parameters[0].parameter ||
-        binding.assignor.parameter === R.parameters[1].parameter
+        binding.assignee.parameter === QArgs[0] ||
+        binding.assignee.parameter === QArgs[1] ||
+        binding.assignee.parameter === R.parameters[0] ||
+        binding.assignee.parameter === R.parameters[1] ||
+        binding.assignor.parameter === QArgs[0] ||
+        binding.assignor.parameter === QArgs[1] ||
+        binding.assignor.parameter === R.parameters[0] ||
+        binding.assignor.parameter === R.parameters[1]
       ) {
         if (checkBindings(binding, qPairs, qMaps)) {
           continue;
@@ -304,17 +363,17 @@ let verifyPreconditions = function checkAllPreconditions(
 
 /**
  * Given Q, selects an action from the set of AOLArray and actions.
- * @param {Map} Q
- * @param {Array} actions
- * @param {Array} domain
- * @returns {Object} An object containing an action, along with an array of binding constraints
+ * @param Q
+ * @param actions
+ * @param domain
+ * @returns An object containing an action, along with an array of binding constraints
  */
 export let chooseAction = function findActionThatSatisfiesQ(
   Q: Literal,
   actions: Action[],
   domain: Action[],
   B: VariableBinding[] | [] = []
-): {action: Action, newBindingConstraints: VariableBinding[]} {
+): { action: Action; newBindingConstraints: VariableBinding[] } {
   // Weld states that action can be chosen from either the array of actions
   // or the AOLArray, but does not give any guidance as to how the action
   // should be selected. I'm going for a super naive, actions array-first approach
@@ -326,24 +385,25 @@ export let chooseAction = function findActionThatSatisfiesQ(
     for (let effect of aAdd.effect) {
       // If an effect matches the `action` Q, that means we have a match, and can perform
       // MGU to ensure we have a matching set of arguments/parameters
-      if (Q.action === effect.action && Q.operation === effect.operation) {
+      if (Q.action === aAdd.action && Q.operation === effect.operation) {
         try {
           // Previously, I had broken this into two separate steps per Weld, where the unfiers coming from
           // MGU could then be converted into binding constraints. But, since a unifier can just be a VariableBinding
           // that is always set to true - I figured we could consolidate this
-          let unifiers = MGU(Q, effect, B);
-          let newBindingConstraints = unifiers.map((x) =>
-            createBindConstrFromUnifier(x)
-          );
+          let newBindingConstraints = MGU(Q, effect, B);
 
-          // We need to change the name of the action from it's generic name, to something that 
+          // We need to change the name of the action from it's generic name, to something that
           // captures the variables being used. So, we clone the Action and modify it's name
-          let newName = `${aAdd.action} - ${effect.parameters}`
-          let aAddNewName = {action: newName, ...aAdd}
-          
+          let eParams = effect.parameters.join(",")
+          let newName = `${aAdd.action} - ${eParams}`;
+          let aAddNewName = { action: newName, ...aAdd };
+
           // the action needs to be returned to add to A
           // newConstraints need to be returned to be added to B
-          return { action: aAddNewName, newBindingConstraints: newBindingConstraints };
+          return {
+            action: aAddNewName,
+            newBindingConstraints: newBindingConstraints,
+          };
         } catch (error) {
           // If MGU doesn't work, we should break out of the action, and into the next one
           // TODO: I don't know if this will work
@@ -354,11 +414,10 @@ export let chooseAction = function findActionThatSatisfiesQ(
         continue;
       }
     }
-    // If there is no action that can satisfy Q in either array, we return a failure
-    throw Error("no action matches Q, failure");
-  }
-};
-
+  };
+  // If there is no action that can satisfy Q in either array, we return a failure
+  throw Error("no action matches Q, failure");
+}
 // Here is an example action:
 // {
 //   action: 'move',
@@ -394,7 +453,6 @@ export let chooseAction = function findActionThatSatisfiesQ(
  * @returns {Map<PropertyKey, Array>} A complete ordered plan
  */
 function POP(plan, agenda) {
-  
   // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
   // if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
   // and before the goal step (aInf)
@@ -408,10 +466,10 @@ function POP(plan, agenda) {
       let newConstraint = [
         {
           name: aAdd.name,
-          tail: 'goal',
+          tail: "goal",
         },
         {
-          name: 'init',
+          name: "init",
           tail: aAdd.name,
         },
       ];
@@ -524,15 +582,12 @@ function POP(plan, agenda) {
       variableBindings
     );
 
-    let domainPrime = modifyAction(domain, action);
+    let domainPrime = updateAction(domain, action);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = updateCausalLinks(links, action, q);
     let orderConstrPrime = updateOrderingConstraints(action, aNeed, order);
-    let bindingConstraintsPrime = variableBindings.concat(
-      newBindingConstraints
-    );
-    // TODO: I need to create more bindings here as well
+    let bindingConstraintsPrime = updateBindingConstraints(newBindingConstraints, variableBindings)
 
     // 4. Update the goal set
     let agendaPrime = agenda.slice(1);
@@ -549,17 +604,23 @@ function POP(plan, agenda) {
       ) !== undefined
     ) {
       // filter out noncodedesignation constraints from preconditions
-      let nonCodeDesignationConstr = action.precondition.filter(lit => lit.action === 'neq');
+      let nonCodeDesignationConstr = action.precondition.filter(
+        (lit) => lit.action === "neq"
+      );
+      // convert noncodedesignation constraints to VariableBindings
+      let codeDesigBindingConstraints = nonCodeDesignationConstr.map(x => convertNDCToBC(x, action)) 
+      
       // add noncodedesignation constraints to bindingConstraintsPrime
-      bindingConstraintsPrime.push(nonCodeDesignationConstr);
+      bindingConstraintsPrime = bindingConstraintsPrime.concat(codeDesigBindingConstraints);
       // This is deterministic (as long as the order of preconditions doesn't change)
       // but this is another thing that could possibly be ordered explicitly
-      agendaPrime.push(action.precondition.filter(lit => lit.action !== 'neq'));
+      agendaPrime.push(
+        action.precondition.filter((lit) => lit.action !== "neq")
+      );
     }
 
-
     let actionsPrime = plan.actions.concat(action);
-    
+
     // 5. causal link protection
     orderConstrPrime = checkForThreats(action, orderConstrPrime, linksPrime);
 

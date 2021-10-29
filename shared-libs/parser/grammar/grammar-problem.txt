@@ -29,8 +29,8 @@ reqType = space* ":" req:word
 objects = ":objects" space* objects:object*
 { return objects; }
 
-object = parameters:objectName+ "-"? space* type:alphanum? space*
-{ return { parameters: parameters, type: type }; }
+object = parameter:objectName "-"? space* type:alphanum? space*
+{ return { parameter: parameter, type: type, version: null }; }
 
 objectName = name:alphanum space*
 { return name; }
@@ -38,7 +38,7 @@ objectName = name:alphanum space*
 state = space* delimiter* ":" name:word space* delimiter* actions:logic*
 { return { name: name.join('').replace(/[,:? ]/g, ''), actions: actions }; }
  
-logic = operation:logicOp* delimiter* action:word space* params:parameterTyped* delimiter*
+logic = operation:logicOp* delimiter* action:word space* params:parameter* delimiter*
 { return { operation: operation.join('').replace(/[,:? ]/g, ''), action: action.join('').replace(/[,:? ]/g, ''), parameters: params }; }
  
 boolean   = "#t" / "#f"

@@ -69,7 +69,7 @@ predicate = delimiter* name:word+ space* param:parameterTyped*
 action = ":action" space* operationName:word parameters:parametersTyped precondition:precondition effect:effect
 { return { action: operationName.join('').replace(/[,:?]/g, ''), parameters: parameters, precondition: precondition, effect: effect }; }
  
-logic = operation:logicOp* delimiter* action:word space* params:parameterTyped* delimiter*
+logic = operation:logicOp* delimiter* action:word space* params:parameter* delimiter*
 { return { operation: operation.join('').replace(/[,:? ]/g, ''), action: action.join('').replace(/[,:? ]/g, ''), parameters: params }; }
  
 boolean   = "#t" / "#f"

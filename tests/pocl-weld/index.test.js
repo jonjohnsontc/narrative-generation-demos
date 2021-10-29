@@ -43,40 +43,47 @@ test("isNew returns true when action is new", () => {
   expect(pocl.isNew(exampleAction)).toBe(true);
 });
 
-const expectedBindingConstraint = { equal: true, assignor: "b", assignee: "C" };
+const b = { parameter: "b", type: null, version: null}
+const C = { parameter: "C", type: null, version: null}
+const expectedBindingConstraint = { equal: true, assignor: b, assignee: C, string: "b-null-null=C-null-null"}
 test("createBindingConstraint returns expected binding constraint", () => {
-  expect(pocl.createBindingConstraint("b", "C", true)).toEqual(
+  expect(pocl.createBindingConstraint(b, C, true)).toEqual(
     expectedBindingConstraint
   );
 });
 
-const expectedBindingConstraintFromUnifer = {
-  equal: true,
-  assignor: "a1",
-  assignee: "C", 
-};
-const unifier = new Map().set("a1", "C");
-test("createBindConstrFromUnifier creates expected binding constraint from unifier", () => {
-  expect(pocl.createBindConstrFromUnifier(unifier)).toEqual(
-    expectedBindingConstraintFromUnifer
-  );
-});
+const D = { parameter: "D", type: null, version: null }
+const a1 = { parameter: "a1", type: null, version: 0 }
+const a2 = { parameter: "a2", type: null, version: 0 }
 
 const Q = { operation: "and", action: "on", parameters: ["C", "D"] };
 const R = { operation: "and", action: "on", parameters: ["a1", "a2"] };
 const bindings = [
-  { equal: true, assignor: "a1", assignee: "C" },
-  { equal: false, assignor: "a2", assignee: "C" },
-  { equal: false, assignor: "a1", assignee: "a2" },
+  { equal: true, assignor: a1, assignee: C },
+  { equal: false, assignor: a2, assignee: C },
+  { equal: false, assignor: a1, assignee: a2 },
 ];
-const expectedUnifiers = [new Map().set("a1", "C"), new Map().set("a2", "D")];
-test("MGU returns most general unifier for move action successfully", () => {
-  expect(pocl.MGU(Q, R, bindings)).toEqual(expectedUnifiers);
+const expectedConstraints = [
+  {
+    equal: true,
+    assignor: { parameter: "a1", type: null, version: 0 },
+    assignee: { parameter: "C", type: null, version: null },
+    string: "a1-null-0=C-null-null"
+  },
+  {
+    equal: true,
+    assignor: { parameter: "a2", type: null, version: 0 },
+    assignee: { parameter: "D", type: null, version: null },
+    string: "a2-null-0=D-null-null"
+  },
+];
+test("MGU returns binding constraints for move action successfully", () => {
+  expect(pocl.MGU(Q, R, bindings)).toEqual(expectedConstraints);
 });
 
 const badQ = { operation: "and", action: "on", parameters: ["C", "C"] };
 test("MGU throws error that most general unifier can't be found because of binding constraints", () => {
-  expect(() => pocl.MGU(badQ, R, bindings)).toThrow();
+  expect(() => pocl.MGU(badQ, R, bindings)).toEqual({hi: "hi"});
 });
 
 const qrPairs = pocl.zip(R, badQ);
@@ -112,5 +119,3 @@ test("modifyAction increments action parameters, and includes action in returned
     pocl.modifyAction(parsed.blocksDomain.actions, expectedAction)
   ).toEqual(expectedDomain);
 });
-
-
