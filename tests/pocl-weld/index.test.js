@@ -96,3 +96,31 @@ test("chooseAction selects action which satisfies binding constraints", () => {
     ],
   });
 });
+
+const expectedUpdatedAction = {
+  action: 'move',
+  parameters: [
+    { parameter: 'b-1', type: null },
+    { parameter: 't1-1', type: null },
+    { parameter: 't2-1', type: null }  
+  ],
+  precondition: [
+    { operation: 'and', action: 'block', parameters: ['b-1'] },
+    { operation: '', action: 'table', parameters: ['t1-1'] },
+    { operation: '', action: 'table', parameters: ['t2-1'] },
+    { operation: '', action: 'on', parameters: ['b-1', 't1-1'] },
+    { operation: 'not', action: 'on', parameters: ['b-1', 't2-1'] },
+    { operation: '', action: 'clear', parameters: ['b-1'] }
+  ],
+  effect: [
+    { operation: 'and', action: 'on', parameters: [ 'b-1', 't2-1' ] },
+    { operation: 'not', action: 'on', parameters: [ 'b-1', 't1-1' ] }
+  ]}
+  test("updateAction correctly updates action with new parameters and returns updated domain", () => {
+    expect(pocl.updateAction(exampleAction)).toEqual(expectedUpdatedAction)
+})
+
+test("replaceAction replaces action in domain with supplied one of the same name", () => {
+  expect(pocl.replaceAction(actionArray, expectedUpdatedAction)).toContainEqual(expectedUpdatedAction);
+  expect(pocl.replaceAction(actionArray, expectedUpdatedAction)).toHaveLength(5);
+});

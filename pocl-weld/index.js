@@ -11,7 +11,7 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.updateAction = exports.zip = void 0;
+exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -28,10 +28,62 @@ var zip = function (array1, array2) {
     return pairs;
 };
 exports.zip = zip;
-var updateAction = function updateActionVariables(domain, action) {
-    var updateActionParameter = ;
+/**
+ * Updates action with new parameters to correspond to Weld on binding constraints
+ * @param action An action whos parameters need to be updated
+ * @returns An updated version of the passed through action with parameters + 1
+ */
+var updateAction = function updateActionVariables(action) {
+    var currentParams = action.parameters.map(function (x) { return x.parameter; });
+    var updateParam = function (param) {
+        var _a;
+        if (param.includes("-")) {
+            var par = (_a = param.split("-"), _a[0]), num = _a[1];
+            return par + "-" + (num + 1);
+        }
+        else {
+            return param + "-1";
+        }
+    };
+    var updateParams = function (param) {
+        return {
+            parameter: updateParam(param.parameter),
+            type: param.type
+        };
+    };
+    var updateLiteral = function (lit, refParams) {
+        var newParams = [];
+        for (var _i = 0, _a = lit.parameters; _i < _a.length; _i++) {
+            var param = _a[_i];
+            if (refParams.includes(param)) {
+                newParams.push(updateParam(param));
+            }
+            else {
+                newParams.push(param);
+            }
+        }
+        return __assign(__assign({}, lit), { parameters: newParams });
+    };
+    var newParameters = action.parameters.map(function (x) { return updateParams(x); });
+    var newPreconditions = action.precondition.map(function (x) {
+        return updateLiteral(x, currentParams);
+    });
+    var newEffects = action.effect.map(function (x) { return updateLiteral(x, currentParams); });
+    var updatedAction = {
+        action: action.action,
+        parameters: newParameters,
+        precondition: newPreconditions,
+        effect: newEffects
+    };
+    return updatedAction;
 };
 exports.updateAction = updateAction;
+var replaceAction = function replaceActionWithNewVersion(domain, action) {
+    var newDomain = domain.slice(1);
+    newDomain.unshift(action);
+    return newDomain;
+};
+exports.replaceAction = replaceAction;
 // I was thinking about putting together some custom exception types like this
 // Not using the Error object, which I'm not sure is good or bad: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/Error
 var NoUnifierException = function (literal) {
@@ -430,7 +482,8 @@ function POP(plan, agenda) {
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
         var _b = (0, exports.chooseAction)(q, actions, domain, variableBindings), action_1 = _b.action, newBindingConstraints = _b.newBindingConstraints;
-        var domainPrime = (0, exports.updateAction)(domain, action_1);
+        var actionPrime = (0, exports.updateAction)(action_1);
+        var domainPrime = (0, exports.replaceAction)(domain, actionPrime);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
         var linksPrime = updateCausalLinks(links, action_1, q);
         var orderConstrPrime = updateOrderingConstraints(action_1, aNeed, plan);
@@ -456,7 +509,8 @@ function POP(plan, agenda) {
             actions: actionsPrime,
             order: orderConstrPrime,
             links: linksPrime,
-            variableBindings: bindingConstraintsPrime
+            variableBindings: bindingConstraintsPrime,
+            domain: domainPrime
         }, agendaPrime);
     }
 }

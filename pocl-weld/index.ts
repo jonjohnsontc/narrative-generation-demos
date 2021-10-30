@@ -1,9 +1,9 @@
 // Type Declarations
 type variableBinding = {
-  equal: boolean,
-  assignor: string,
-  assignee: string
-}
+  equal: boolean;
+  assignor: string;
+  assignee: string;
+};
 
 type Literal = {
   operation: string;
@@ -13,9 +13,14 @@ type Literal = {
 
 type Action = {
   action: string;
-  parameters: readonly string[];
+  parameters: readonly ActionParam[];
   precondition: readonly Literal[];
   effect: readonly Literal[];
+};
+
+type ActionParam = {
+  parameter: string;
+  type: string | null;
 };
 
 // I have this in cpopl/script.js as well
@@ -35,9 +40,65 @@ export let zip = (array1, array2) => {
   return pairs;
 };
 
-export let updateAction = function updateActionVariables(domain: Action[], action: Action) {
-  let updateActionParameter = ""
-}
+/**
+ * Updates action with new parameters to correspond to Weld on binding constraints
+ * @param action An action whos parameters need to be updated
+ * @returns An updated version of the passed through action with parameters + 1
+ */
+export let updateAction = function updateActionVariables(
+  action: Action
+): Action {
+  let currentParams = action.parameters.map((x) => x.parameter);
+
+  let updateParam = (param: string) => {
+    if (param.includes("-")) {
+      let [par, num] = param.split("-");
+      return `${par}-${num + 1}`;
+    } else {
+      return `${param}-1`;
+    }
+  };
+  let updateParams = (param: ActionParam) => {
+    return {
+      parameter: updateParam(param.parameter),
+      type: param.type,
+    };
+  };
+  let updateLiteral = (lit: Literal, refParams: readonly string[]) => {
+    let newParams: string[] = [];
+    for (let param of lit.parameters) {
+      if (refParams.includes(param)) {
+        newParams.push(updateParam(param));
+      } else {
+        newParams.push(param);
+      }
+    }
+    return { ...lit, parameters: newParams };
+  };
+  let newParameters = action.parameters.map((x) => updateParams(x));
+  let newPreconditions = action.precondition.map((x) =>
+    updateLiteral(x, currentParams)
+  );
+  let newEffects = action.effect.map((x) => updateLiteral(x, currentParams));
+
+  let updatedAction = {
+    action: action.action,
+    parameters: newParameters,
+    precondition: newPreconditions,
+    effect: newEffects,
+  };
+
+  return updatedAction;
+};
+
+export let replaceAction = function replaceActionWithNewVersion(
+  domain: Action[],
+  action: Action
+): Action[] {
+  let newDomain = domain.slice(1);
+  newDomain.unshift(action);
+  return newDomain;
+};
 
 // I was thinking about putting together some custom exception types like this
 // Not using the Error object, which I'm not sure is good or bad: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/Error
@@ -81,39 +142,39 @@ export const pairMatch = function doVectorPairsMatch(a, b) {
  * @param {boolean} equal true if the params should be set to equal, false if not
  * @returns {variableBinding}
  */
-export let createBindingConstraint = function createBindingConstraintFromLiterals(
-  assignor: string,
-  assignee: string,
-  equal: boolean
-): variableBinding {
-  // Making sure the assignor is not capitalized
-  if (assignor.charCodeAt(0) < 96) {
-    throw Error("Invalid assignor");
-  }
-  return {
-    equal: equal,
+export let createBindingConstraint =
+  function createBindingConstraintFromLiterals(
+    assignor: string,
+    assignee: string,
+    equal: boolean
+  ): variableBinding {
+    // Making sure the assignor is not capitalized
+    if (assignor.charCodeAt(0) < 96) {
+      throw Error("Invalid assignor");
+    }
+    return {
+      equal: equal,
 
-    // This isn't a construct of POP from Weld, rather something I did to try and more easily
-    // differentiate constants from Q vs params from an operator
-    assignor: assignor,
-    assignee: assignee,
+      // This isn't a construct of POP from Weld, rather something I did to try and more easily
+      // differentiate constants from Q vs params from an operator
+      assignor: assignor,
+      assignee: assignee,
+    };
   };
-};
 
 /**
  * Creates binding constraint from a unifier
  * @param {Map} unifier
  * @returns {any}
  */
-export let createBindConstrFromUnifier = function createBindingConstraintFromUnifiers(
-  unifier
-) {
-  // we can unpack the unifier by calling entries and next, since it should only be one k,v pair
-  let [assignor, assignee] = unifier.entries().next().value;
+export let createBindConstrFromUnifier =
+  function createBindingConstraintFromUnifiers(unifier) {
+    // we can unpack the unifier by calling entries and next, since it should only be one k,v pair
+    let [assignor, assignee] = unifier.entries().next().value;
 
-  // A binding contstraint from unifiers is always true, because unifiers are always equal
-  return createBindingConstraint(assignor, assignee, true);
-};
+    // A binding contstraint from unifiers is always true, because unifiers are always equal
+    return createBindingConstraint(assignor, assignee, true);
+  };
 
 export let checkBindings = function checkBindingsForConflict(
   binding,
@@ -466,10 +527,16 @@ function POP(plan, agenda) {
 
     // 3. Action selection
     // TODO: Where do I get domain from? Haven't come across a place in Weld
-    let { action, newBindingConstraints } = chooseAction(q, actions, domain, variableBindings);
+    let { action, newBindingConstraints } = chooseAction(
+      q,
+      actions,
+      domain,
+      variableBindings
+    );
 
-    let domainPrime  = updateAction(domain, action)
-    
+    let actionPrime = updateAction(action);
+    let domainPrime = replaceAction(domain, actionPrime);
+
     // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = updateCausalLinks(links, action, q);
     let orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
@@ -503,7 +570,7 @@ function POP(plan, agenda) {
         order: orderConstrPrime,
         links: linksPrime,
         variableBindings: bindingConstraintsPrime,
-        // TODOJON: Be sure to add domain here
+        domain: domainPrime
       },
       agendaPrime
     );
