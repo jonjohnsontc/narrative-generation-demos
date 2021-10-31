@@ -11,7 +11,7 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.zip = void 0;
+exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.updateAgendaAndContraints = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -125,7 +125,7 @@ exports.pairMatch = pairMatch;
  * @param {string} assignor A parameter from an operator
  * @param {string} assignee A parameter from an operator or param of Q
  * @param {boolean} equal true if the params should be set to equal, false if not
- * @returns {variableBinding}
+ * @returns {VariableBinding}
  */
 var createBindingConstraint = function createBindingConstraintFromLiterals(assignor, assignee, equal) {
     // Making sure the assignor is not capitalized
@@ -154,6 +154,21 @@ var createBindConstrFromUnifier = function createBindingConstraintFromUnifiers(u
     return (0, exports.createBindingConstraint)(assignor, assignee, true);
 };
 exports.createBindConstrFromUnifier = createBindConstrFromUnifier;
+/**
+ * Conditionally updates agenda and binding constraints if the action passed
+ * through has not yet been added to the plan
+ * */
+var updateAgendaAndContraints = function condUpdateAgendaAndConstraints(action, actions, agenda, bindingConstraints) {
+    if (actions.find(function (x) { return x.action === action.action; }) !== undefined) {
+        var nonCodeDesignationConstr = action.precondition.filter(function (lit) { return lit.action === "neq"; });
+        var newConstraints = nonCodeDesignationConstr.map(function (x) { return (0, exports.createBindingConstraint)(x.parameters[0], x.parameters[1], false); });
+        bindingConstraints.push.apply(bindingConstraints, newConstraints);
+        // This is deterministic (as long as the order of preconditions doesn't change)
+        // but this is another thing that could possibly be ordered explicitly
+        agenda.push.apply(agenda, action.precondition.filter(function (lit) { return lit.action !== "neq"; }));
+    }
+};
+exports.updateAgendaAndContraints = updateAgendaAndContraints;
 var checkBindings = function checkBindingsForConflict(binding, argumentPairs, argumentMaps) {
     // If it's an equals binding, we need to make sure that the value within the binding linked to the
     // operator's parameter is resolvable to our chosen parameters
@@ -283,17 +298,16 @@ var verifyPreconditions = function checkAllPreconditions(parameters, isActionNew
 };
 /**
  * Given Q, selects an action from the set of AOLArray and actions.
- * @param {Map} Q
- * @param {Array} actions
- * @param {Array} domain
- * @returns {Object} An object containing an action, along with an array of binding constraints
+ * @param Q
+ * @param actions
+ * @param domain
+ * @returns An object containing an action, along with an array of binding constraints
  */
 var chooseAction = function findActionThatSatisfiesQ(Q, actions, domain, B) {
     if (B === void 0) { B = []; }
     // Weld states that action can be chosen from either the array of actions
     // or the AOLArray, but does not give any guidance as to how the action
     // should be selected. I'm going for a super naive, actions array-first approach
-    /** @type {Array<Map<PropertyKey, Map<PropertyKey, Array>>>} */
     var allActions = domain.concat(actions);
     for (var _i = 0, allActions_1 = allActions; _i < allActions_1.length; _i++) {
         var aAdd = allActions_1[_i];
@@ -309,9 +323,14 @@ var chooseAction = function findActionThatSatisfiesQ(Q, actions, domain, B) {
                     var newBindingConstraints = unifiers.map(function (x) {
                         return (0, exports.createBindConstrFromUnifier)(x);
                     });
+                    var newName = aAdd.action + " - " + effect.parameters;
+                    var aAddNewName = __assign(__assign({}, aAdd), { action: newName });
                     // the action needs to be returned to add to A
                     // newConstraints need to be returned to be added to B
-                    return { action: aAdd, newBindingConstraints: newBindingConstraints };
+                    return {
+                        action: aAddNewName,
+                        newBindingConstraints: newBindingConstraints
+                    };
                 }
                 catch (error) {
                     // If MGU doesn't work, we should break out of the action, and into the next one
@@ -481,29 +500,21 @@ function POP(plan, agenda) {
         var _a = agenda[0], q = _a.q, aNeed = _a.aNeed;
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
-        var _b = (0, exports.chooseAction)(q, actions, domain, variableBindings), action_1 = _b.action, newBindingConstraints = _b.newBindingConstraints;
-        var actionPrime = (0, exports.updateAction)(action_1);
+        var _b = (0, exports.chooseAction)(q, actions, domain, variableBindings), action = _b.action, newBindingConstraints = _b.newBindingConstraints;
+        var actionPrime = (0, exports.updateAction)(action);
         var domainPrime = (0, exports.replaceAction)(domain, actionPrime);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
-        var linksPrime = updateCausalLinks(links, action_1, q);
-        var orderConstrPrime = updateOrderingConstraints(action_1, aNeed, plan);
-        var actionsPrime = plan.actions.concat(action_1);
+        var linksPrime = updateCausalLinks(links, action, q);
+        var orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
+        var actionsPrime = plan.actions.concat(action);
         var bindingConstraintsPrime = variableBindings.concat(newBindingConstraints);
         // TODO: I need to create more bindings here as well
         // 4. Update the goal set
-        var agendaPrime = agenda.splice(0, 1);
-        // If aAdd is newly instantiated, then for each conjunct Qi, of its precondition,
-        // add <Qi, aAdd> to the agenda
-        // In other words, if aAdd.name is not in plan, we add each of
-        // its preconditions to the agenda
-        // TODO: This probably doesn't work,
-        if (plan.actions.find(function (x) { return x.name === action_1.name; }) === null) {
-            // This is deterministic (as long as the order of preconditions doesn't change)
-            // but this is another thing that could possibly be ordered explicitly
-            agendaPrime.push(action_1.preconditions);
-        }
+        var agendaPrime = agenda.slice(1);
+        // This can potentially mutate both agendaPrime and bindingConstraintsPrime
+        (0, exports.updateAgendaAndContraints)(action, actions, agendaPrime, bindingConstraintsPrime);
         // 5. causal link protection
-        orderConstrPrime = checkForThreats(action_1, orderConstrPrime, linksPrime);
+        orderConstrPrime = checkForThreats(action, orderConstrPrime, linksPrime);
         // 6. recursive invocation
         POP({
             actions: actionsPrime,

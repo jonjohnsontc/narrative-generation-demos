@@ -1,5 +1,5 @@
-const pocl = require("../../pocl-weld/index")
-const parsed = require("../../shared-libs/parser/parser")
+const pocl = require("../../pocl-weld/index");
+const parsed = require("../../shared-libs/parser/parser");
 // Opening state actions
 const actions = parsed.blocksProblem.states[0].actions;
 
@@ -16,7 +16,7 @@ const array1 = ["a", "b", "c", "d", "e"];
 const array2 = ["1", "2", "3", "4", "5"];
 const expectedArray = [
   ["a", "1"],
-  ["b", "2"], 
+  ["b", "2"],
   ["c", "3"],
   ["d", "4"],
   ["e", "5"],
@@ -88,8 +88,8 @@ test("checkBindings returns false when bindings conflict with Q", () => {
 const actionArray = parsed.blocksDomain.actions;
 const expectedAction = parsed.blocksDomain.actions[0];
 test("chooseAction selects action which satisfies binding constraints", () => {
-  expect(pocl.chooseAction(Q, [], actionArray, [])).toEqual({
-    action: expectedAction,
+  expect(pocl.chooseAction(Q, [], actionArray, [])).toStrictEqual({
+    action: { ...expectedAction, action: `${expectedAction.action} - b,t2` },
     newBindingConstraints: [
       { assignee: "C", assignor: "b", equal: true },
       { assignee: "D", assignor: "t2", equal: true },
@@ -98,29 +98,63 @@ test("chooseAction selects action which satisfies binding constraints", () => {
 });
 
 const expectedUpdatedAction = {
-  action: 'move',
+  action: "move",
   parameters: [
-    { parameter: 'b-1', type: null },
-    { parameter: 't1-1', type: null },
-    { parameter: 't2-1', type: null }  
+    { parameter: "b-1", type: null },
+    { parameter: "t1-1", type: null },
+    { parameter: "t2-1", type: null },
   ],
   precondition: [
-    { operation: 'and', action: 'block', parameters: ['b-1'] },
-    { operation: '', action: 'table', parameters: ['t1-1'] },
-    { operation: '', action: 'table', parameters: ['t2-1'] },
-    { operation: '', action: 'on', parameters: ['b-1', 't1-1'] },
-    { operation: 'not', action: 'on', parameters: ['b-1', 't2-1'] },
-    { operation: '', action: 'clear', parameters: ['b-1'] }
+    { operation: "and", action: "block", parameters: ["b-1"] },
+    { operation: "", action: "table", parameters: ["t1-1"] },
+    { operation: "", action: "table", parameters: ["t2-1"] },
+    { operation: "", action: "on", parameters: ["b-1", "t1-1"] },
+    { operation: "not", action: "on", parameters: ["b-1", "t2-1"] },
+    { operation: "", action: "clear", parameters: ["b-1"] },
   ],
   effect: [
-    { operation: 'and', action: 'on', parameters: [ 'b-1', 't2-1' ] },
-    { operation: 'not', action: 'on', parameters: [ 'b-1', 't1-1' ] }
-  ]}
-  test("updateAction correctly updates action with new parameters and returns updated domain", () => {
-    expect(pocl.updateAction(exampleAction)).toEqual(expectedUpdatedAction)
-})
+    { operation: "and", action: "on", parameters: ["b-1", "t2-1"] },
+    { operation: "not", action: "on", parameters: ["b-1", "t1-1"] },
+  ],
+};
+test("updateAction correctly updates action with new parameters and returns it", () => {
+  expect(pocl.updateAction(exampleAction)).toEqual(expectedUpdatedAction);
+});
 
 test("replaceAction replaces action in domain with supplied one of the same name", () => {
-  expect(pocl.replaceAction(actionArray, expectedUpdatedAction)).toContainEqual(expectedUpdatedAction);
-  expect(pocl.replaceAction(actionArray, expectedUpdatedAction)).toHaveLength(5);
+  expect(pocl.replaceAction(actionArray, expectedUpdatedAction)).toContainEqual(
+    expectedUpdatedAction
+  );
+  expect(pocl.replaceAction(actionArray, expectedUpdatedAction)).toHaveLength(
+    5
+  );
+});
+
+// goal state of blocksProblem1 will be our agenda
+const agenda = parsed.blocksProblem.states[1].actions;
+const newAction = {
+  ...expectedUpdatedAction,
+  precondition: [
+    { operation: "and", action: "block", parameters: ["b-1"] },
+    { operation: "", action: "table", parameters: ["t1-1"] },
+    { operation: "", action: "table", parameters: ["t2-1"] },
+    { operation: "", action: "on", parameters: ["b-1", "t1-1"] },
+    { operation: "not", action: "on", parameters: ["b-1", "t2-1"] },
+    { operation: "", action: "clear", parameters: ["b-1"] },
+    { operation: "", action: "neq", parameters: ["b-1", "t-1"] },
+    { operation: "", action: "neq", parameters: ["b-1", "t-2"] },
+  ],
+};
+const testActions = [...actionArray];
+const bindConstraints = [];
+test("updateAgendaAndContraints successfully updates agenda and constraints with properties of new action passed through", () => {
+  pocl.updateAgendaAndContraints(
+    newAction,
+    testActions,
+    agenda,
+    bindConstraints
+  );
+  // There should be two binding constraints added, the two "neq" actions above
+  expect(bindConstraints).toHaveLength(2);
+  expect(agenda).toHaveLength(9);
 });

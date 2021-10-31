@@ -1,5 +1,5 @@
 // Type Declarations
-type variableBinding = {
+type VariableBinding = {
   equal: boolean;
   assignor: string;
   assignee: string;
@@ -49,7 +49,6 @@ export let updateAction = function updateActionVariables(
   action: Action
 ): Action {
   let currentParams = action.parameters.map((x) => x.parameter);
-
   let updateParam = (param: string) => {
     if (param.includes("-")) {
       let [par, num] = param.split("-");
@@ -140,14 +139,14 @@ export const pairMatch = function doVectorPairsMatch(a, b) {
  * @param {string} assignor A parameter from an operator
  * @param {string} assignee A parameter from an operator or param of Q
  * @param {boolean} equal true if the params should be set to equal, false if not
- * @returns {variableBinding}
+ * @returns {VariableBinding}
  */
 export let createBindingConstraint =
   function createBindingConstraintFromLiterals(
     assignor: string,
     assignee: string,
     equal: boolean
-  ): variableBinding {
+  ): VariableBinding {
     // Making sure the assignor is not capitalized
     if (assignor.charCodeAt(0) < 96) {
       throw Error("Invalid assignor");
@@ -175,7 +174,30 @@ export let createBindConstrFromUnifier =
     // A binding contstraint from unifiers is always true, because unifiers are always equal
     return createBindingConstraint(assignor, assignee, true);
   };
-
+/**
+ * Conditionally updates agenda and binding constraints if the action passed
+ * through has not yet been added to the plan
+ * */ 
+export let updateAgendaAndContraints = function condUpdateAgendaAndConstraints(
+  action: Action,
+  actions: Action[],
+  agenda: Literal[],
+  bindingConstraints: VariableBinding[]
+) {
+  if (actions.find((x: Action) => x.action === action.action) !== undefined) {
+    let nonCodeDesignationConstr = action.precondition.filter(
+      (lit) => lit.action === "neq"
+    );
+    
+    let newConstraints = nonCodeDesignationConstr.map(x => createBindingConstraint(x.parameters[0], x.parameters[1], false));
+    
+    bindingConstraints.push(...newConstraints)
+    
+    // This is deterministic (as long as the order of preconditions doesn't change)
+    // but this is another thing that could possibly be ordered explicitly
+    agenda.push(...action.precondition.filter((lit) => lit.action !== "neq"));
+  }
+};
 export let checkBindings = function checkBindingsForConflict(
   binding,
   argumentPairs,
@@ -319,21 +341,20 @@ let verifyPreconditions = function checkAllPreconditions(
 
 /**
  * Given Q, selects an action from the set of AOLArray and actions.
- * @param {Map} Q
- * @param {Array} actions
- * @param {Array} domain
- * @returns {Object} An object containing an action, along with an array of binding constraints
+ * @param Q
+ * @param actions
+ * @param domain
+ * @returns An object containing an action, along with an array of binding constraints
  */
 export let chooseAction = function findActionThatSatisfiesQ(
-  Q,
-  actions,
-  domain,
-  B = []
+  Q: Literal,
+  actions: Action[],
+  domain: Action[],
+  B: VariableBinding[] = []
 ) {
   // Weld states that action can be chosen from either the array of actions
   // or the AOLArray, but does not give any guidance as to how the action
   // should be selected. I'm going for a super naive, actions array-first approach
-  /** @type {Array<Map<PropertyKey, Map<PropertyKey, Array>>>} */
   let allActions = domain.concat(actions);
 
   for (let aAdd of allActions) {
@@ -348,10 +369,15 @@ export let chooseAction = function findActionThatSatisfiesQ(
           let newBindingConstraints = unifiers.map((x) =>
             createBindConstrFromUnifier(x)
           );
+          let newName = `${aAdd.action} - ${effect.parameters}`;
+          let aAddNewName = { ...aAdd, action: newName };
 
           // the action needs to be returned to add to A
           // newConstraints need to be returned to be added to B
-          return { action: aAdd, newBindingConstraints: newBindingConstraints };
+          return {
+            action: aAddNewName,
+            newBindingConstraints: newBindingConstraints,
+          };
         } catch (error) {
           // If MGU doesn't work, we should break out of the action, and into the next one
           // TODO: I don't know if this will work
@@ -547,18 +573,10 @@ function POP(plan, agenda) {
     // TODO: I need to create more bindings here as well
 
     // 4. Update the goal set
-    let agendaPrime = agenda.splice(0, 1);
+    let agendaPrime = agenda.slice(1);
 
-    // If aAdd is newly instantiated, then for each conjunct Qi, of its precondition,
-    // add <Qi, aAdd> to the agenda
-    // In other words, if aAdd.name is not in plan, we add each of
-    // its preconditions to the agenda
-    // TODO: This probably doesn't work,
-    if (plan.actions.find((x) => x.name === action.name) === null) {
-      // This is deterministic (as long as the order of preconditions doesn't change)
-      // but this is another thing that could possibly be ordered explicitly
-      agendaPrime.push(action.preconditions);
-    }
+    // This can potentially mutate both agendaPrime and bindingConstraintsPrime
+    updateAgendaAndContraints(action, actions, agendaPrime, bindingConstraintsPrime)
 
     // 5. causal link protection
     orderConstrPrime = checkForThreats(action, orderConstrPrime, linksPrime);
@@ -570,7 +588,7 @@ function POP(plan, agenda) {
         order: orderConstrPrime,
         links: linksPrime,
         variableBindings: bindingConstraintsPrime,
-        domain: domainPrime
+        domain: domainPrime,
       },
       agendaPrime
     );
