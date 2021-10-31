@@ -5,6 +5,8 @@ type VariableBinding = {
   assignee: string;
 };
 
+type BindingMap = Map<PropertyKey, VariableBinding>;
+
 type Literal = {
   operation: string;
   action: string;
@@ -136,28 +138,35 @@ export const pairMatch = function doVectorPairsMatch(a, b) {
 
 /**
  * Creates a binding constraint from the two params provided
- * @param {string} assignor A parameter from an operator
- * @param {string} assignee A parameter from an operator or param of Q
- * @param {boolean} equal true if the params should be set to equal, false if not
- * @returns {VariableBinding}
+ * @param assignor A parameter from an operator
+ * @param assignee A parameter from an operator or param of Q
+ * @param equal true if the params should be set to equal, false if not
+ * @returns
  */
 export let createBindingConstraint =
   function createBindingConstraintFromLiterals(
     assignor: string,
     assignee: string,
     equal: boolean
-  ): VariableBinding {
+  ): { bindingConstraint: VariableBinding; key: string } {
     // Making sure the assignor is not capitalized
     if (assignor.charCodeAt(0) < 96) {
       throw Error("Invalid assignor");
     }
-    return {
-      equal: equal,
 
-      // This isn't a construct of POP from Weld, rather something I did to try and more easily
-      // differentiate constants from Q vs params from an operator
-      assignor: assignor,
-      assignee: assignee,
+    let sign = equal ? "=" : "≠";
+    let constraintString = `${assignor}${sign}${assignee}`;
+
+    return {
+      bindingConstraint: {
+        equal: equal,
+
+        // This isn't a construct of POP from Weld, rather something I did to try and more easily
+        // differentiate constants from Q vs params from an operator
+        assignor: assignor,
+        assignee: assignee,
+      },
+      key: constraintString,
     };
   };
 
@@ -177,22 +186,24 @@ export let createBindConstrFromUnifier =
 /**
  * Conditionally updates agenda and binding constraints if the action passed
  * through has not yet been added to the plan
- * */ 
+ * */
 export let updateAgendaAndContraints = function condUpdateAgendaAndConstraints(
   action: Action,
   actions: Action[],
   agenda: Literal[],
-  bindingConstraints: VariableBinding[]
+  bindingConstraints: BindingMap
 ) {
   if (actions.find((x: Action) => x.action === action.action) !== undefined) {
     let nonCodeDesignationConstr = action.precondition.filter(
       (lit) => lit.action === "neq"
     );
-    
-    let newConstraints = nonCodeDesignationConstr.map(x => createBindingConstraint(x.parameters[0], x.parameters[1], false));
-    
-    bindingConstraints.push(...newConstraints)
-    
+
+    let newConstraints = nonCodeDesignationConstr.map((x) =>
+      createBindingConstraint(x.parameters[0], x.parameters[1], false)
+    );
+
+    updateBindingConstraints(bindingConstraints, newConstraints);
+
     // This is deterministic (as long as the order of preconditions doesn't change)
     // but this is another thing that could possibly be ordered explicitly
     agenda.push(...action.precondition.filter((lit) => lit.action !== "neq"));
@@ -245,6 +256,17 @@ export let checkBindings = function checkBindingsForConflict(
       let assigneeValue = assigneeKV.get(binding.assignee);
       return assignorValue !== assigneeValue;
     }
+  }
+};
+
+export let updateBindingConstraints = function condUpdateBindingConstraints(
+  currentBindings: BindingMap,
+  newBindings: Array<{ bindingConstraint: VariableBinding; key: string }>
+) {
+  for (let binding of newBindings) {
+   if (currentBindings.has(binding.key) === false) {
+     currentBindings.set(binding.key, binding.bindingConstraint)
+   }
   }
 };
 
@@ -567,16 +589,15 @@ function POP(plan, agenda) {
     let linksPrime = updateCausalLinks(links, action, q);
     let orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
     let actionsPrime = plan.actions.concat(action);
-    let bindingConstraintsPrime = variableBindings.concat(
-      newBindingConstraints
-    );
-    // TODO: I need to create more bindings here as well
+
+    // We mutate the original variableBindings, unlike all the other parts of the plan
+    updateBindingConstraints(variableBindings, newBindingConstraints);
 
     // 4. Update the goal set
     let agendaPrime = agenda.slice(1);
 
     // This can potentially mutate both agendaPrime and bindingConstraintsPrime
-    updateAgendaAndContraints(action, actions, agendaPrime, bindingConstraintsPrime)
+    updateAgendaAndContraints(action, actions, agendaPrime, variableBindings);
 
     // 5. causal link protection
     orderConstrPrime = checkForThreats(action, orderConstrPrime, linksPrime);
@@ -587,7 +608,7 @@ function POP(plan, agenda) {
         actions: actionsPrime,
         order: orderConstrPrime,
         links: linksPrime,
-        variableBindings: bindingConstraintsPrime,
+        variableBindings: variableBindings,
         domain: domainPrime,
       },
       agendaPrime

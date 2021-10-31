@@ -45,9 +45,9 @@ test("isNew returns true when action is new", () => {
 
 const expectedBindingConstraint = { equal: true, assignor: "b", assignee: "C" };
 test("createBindingConstraint returns expected binding constraint", () => {
-  expect(pocl.createBindingConstraint("b", "C", true)).toEqual(
-    expectedBindingConstraint
-  );
+  let result = pocl.createBindingConstraint("b", "C", true);
+  expect(result).toHaveProperty("bindingConstraint", expectedBindingConstraint);
+  expect(result).toHaveProperty("key", "b=C");
 });
 
 const expectedBindingConstraintFromUnifer = {
@@ -57,7 +57,8 @@ const expectedBindingConstraintFromUnifer = {
 };
 const unifier = new Map().set("a1", "C");
 test("createBindConstrFromUnifier creates expected binding constraint from unifier", () => {
-  expect(pocl.createBindConstrFromUnifier(unifier)).toEqual(
+  expect(pocl.createBindConstrFromUnifier(unifier)).toHaveProperty(
+    "bindingConstraint",
     expectedBindingConstraintFromUnifer
   );
 });
@@ -91,8 +92,14 @@ test("chooseAction selects action which satisfies binding constraints", () => {
   expect(pocl.chooseAction(Q, [], actionArray, [])).toStrictEqual({
     action: { ...expectedAction, action: `${expectedAction.action} - b,t2` },
     newBindingConstraints: [
-      { assignee: "C", assignor: "b", equal: true },
-      { assignee: "D", assignor: "t2", equal: true },
+      {
+        bindingConstraint: { assignee: "C", assignor: "b", equal: true },
+        key: "b=C",
+      },
+      {
+        bindingConstraint: { assignee: "D", assignor: "t2", equal: true },
+        key: "t2=D",
+      },
     ],
   });
 });
@@ -146,7 +153,7 @@ const newAction = {
   ],
 };
 const testActions = [...actionArray];
-const bindConstraints = [];
+const bindConstraints = new Map();
 test("updateAgendaAndContraints successfully updates agenda and constraints with properties of new action passed through", () => {
   pocl.updateAgendaAndContraints(
     newAction,
@@ -155,6 +162,7 @@ test("updateAgendaAndContraints successfully updates agenda and constraints with
     bindConstraints
   );
   // There should be two binding constraints added, the two "neq" actions above
-  expect(bindConstraints).toHaveLength(2);
+  expect(bindConstraints.get("b-1≠t-1")).toEqual(expect.anything())
+  expect(bindConstraints.get("b-1≠t-2")).toEqual(expect.anything())
   expect(agenda).toHaveLength(9);
 });

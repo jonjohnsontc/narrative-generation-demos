@@ -11,7 +11,7 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.checkBindings = exports.updateAgendaAndContraints = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.zip = void 0;
+exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -122,22 +122,27 @@ var pairMatch = function doVectorPairsMatch(a, b) {
 exports.pairMatch = pairMatch;
 /**
  * Creates a binding constraint from the two params provided
- * @param {string} assignor A parameter from an operator
- * @param {string} assignee A parameter from an operator or param of Q
- * @param {boolean} equal true if the params should be set to equal, false if not
- * @returns {VariableBinding}
+ * @param assignor A parameter from an operator
+ * @param assignee A parameter from an operator or param of Q
+ * @param equal true if the params should be set to equal, false if not
+ * @returns
  */
 var createBindingConstraint = function createBindingConstraintFromLiterals(assignor, assignee, equal) {
     // Making sure the assignor is not capitalized
     if (assignor.charCodeAt(0) < 96) {
         throw Error("Invalid assignor");
     }
+    var sign = equal ? "=" : "≠";
+    var constraintString = "" + assignor + sign + assignee;
     return {
-        equal: equal,
-        // This isn't a construct of POP from Weld, rather something I did to try and more easily
-        // differentiate constants from Q vs params from an operator
-        assignor: assignor,
-        assignee: assignee
+        bindingConstraint: {
+            equal: equal,
+            // This isn't a construct of POP from Weld, rather something I did to try and more easily
+            // differentiate constants from Q vs params from an operator
+            assignor: assignor,
+            assignee: assignee
+        },
+        key: constraintString
     };
 };
 exports.createBindingConstraint = createBindingConstraint;
@@ -161,8 +166,10 @@ exports.createBindConstrFromUnifier = createBindConstrFromUnifier;
 var updateAgendaAndContraints = function condUpdateAgendaAndConstraints(action, actions, agenda, bindingConstraints) {
     if (actions.find(function (x) { return x.action === action.action; }) !== undefined) {
         var nonCodeDesignationConstr = action.precondition.filter(function (lit) { return lit.action === "neq"; });
-        var newConstraints = nonCodeDesignationConstr.map(function (x) { return (0, exports.createBindingConstraint)(x.parameters[0], x.parameters[1], false); });
-        bindingConstraints.push.apply(bindingConstraints, newConstraints);
+        var newConstraints = nonCodeDesignationConstr.map(function (x) {
+            return (0, exports.createBindingConstraint)(x.parameters[0], x.parameters[1], false);
+        });
+        (0, exports.updateBindingConstraints)(bindingConstraints, newConstraints);
         // This is deterministic (as long as the order of preconditions doesn't change)
         // but this is another thing that could possibly be ordered explicitly
         agenda.push.apply(agenda, action.precondition.filter(function (lit) { return lit.action !== "neq"; }));
@@ -211,6 +218,15 @@ var checkBindings = function checkBindingsForConflict(binding, argumentPairs, ar
     }
 };
 exports.checkBindings = checkBindings;
+var updateBindingConstraints = function condUpdateBindingConstraints(currentBindings, newBindings) {
+    for (var _i = 0, newBindings_1 = newBindings; _i < newBindings_1.length; _i++) {
+        var binding = newBindings_1[_i];
+        if (currentBindings.has(binding.key) === false) {
+            currentBindings.set(binding.key, binding.bindingConstraint);
+        }
+    }
+};
+exports.updateBindingConstraints = updateBindingConstraints;
 /**
  * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B.
  * So if Q has parameters: ['b', 'c'], and R has parameters: ['p1', 'p2'], and variable bindings are: [],
@@ -507,12 +523,12 @@ function POP(plan, agenda) {
         var linksPrime = updateCausalLinks(links, action, q);
         var orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
         var actionsPrime = plan.actions.concat(action);
-        var bindingConstraintsPrime = variableBindings.concat(newBindingConstraints);
-        // TODO: I need to create more bindings here as well
+        // We mutate the original variableBindings, unlike all the other parts of the plan
+        (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         // 4. Update the goal set
         var agendaPrime = agenda.slice(1);
         // This can potentially mutate both agendaPrime and bindingConstraintsPrime
-        (0, exports.updateAgendaAndContraints)(action, actions, agendaPrime, bindingConstraintsPrime);
+        (0, exports.updateAgendaAndContraints)(action, actions, agendaPrime, variableBindings);
         // 5. causal link protection
         orderConstrPrime = checkForThreats(action, orderConstrPrime, linksPrime);
         // 6. recursive invocation
@@ -520,7 +536,7 @@ function POP(plan, agenda) {
             actions: actionsPrime,
             order: orderConstrPrime,
             links: linksPrime,
-            variableBindings: bindingConstraintsPrime,
+            variableBindings: variableBindings,
             domain: domainPrime
         }, agendaPrime);
     }
