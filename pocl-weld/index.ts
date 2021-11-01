@@ -288,22 +288,16 @@ export let updateBindingConstraints = function condUpdateBindingConstraints(
  * @param {any} B Vector of (non)codedesignation constraints
  * @returns {any} Most general unifier of literals
  */
-export let MGU = function findMostGenerialUnifier(
-  Q: Literal,
-  R: Literal,
-  B: VariableBinding[] = []
-) {
+ export let MGU = function findMostGenerialUnifier(Q, R, B) {
+  // For the most general unifier, let's just assume Q's parameters
+  /** @type {Array} */
   let QArgs = Q.parameters;
 
   // binding each parameter with each value
   let qPairs = zip(R.parameters, Q.parameters);
 
-  // TODOJON: Will have to adjust now that Literals have Parameters instead of just string values as params
   // These are variable bindings as maps e.g., {b1: 'C'}
-  // let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
-  let qMaps = qPairs.map(pair =>
-    createBindingConstraint(pair[0], pair[1], true)
-  );
+  let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
 
   // If we have any bindings, we can evaluate them against Q and R's parameters
   if (B.length > 0) {
@@ -383,7 +377,7 @@ let verifyPreconditions = function checkAllPreconditions(
  * @param domain
  * @returns An object containing an action, along with an array of binding constraints
  */
-export let chooseAction = function findActionThatSatisfiesQ(
+ export let chooseAction = function findActionThatSatisfiesQ(
   Q: Literal,
   actions: Action[],
   domain: Action[],
@@ -400,7 +394,7 @@ export let chooseAction = function findActionThatSatisfiesQ(
     for (let effect of aAdd.effect) {
       // If an effect matches the `action` Q, that means we have a match, and can perform
       // MGU to ensure we have a matching set of arguments/parameters
-      if (Q.action === aAdd.action && Q.operation === effect.operation) {
+      if (Q.action === effect.action && Q.operation === effect.operation) {
         try {
           let unifiers = MGU(Q, effect, B);
           let newBindingConstraints = unifiers.map((x) =>

@@ -237,16 +237,13 @@ exports.updateBindingConstraints = updateBindingConstraints;
  * @returns {any} Most general unifier of literals
  */
 var MGU = function findMostGenerialUnifier(Q, R, B) {
-    if (B === void 0) { B = []; }
+    // For the most general unifier, let's just assume Q's parameters
+    /** @type {Array} */
     var QArgs = Q.parameters;
     // binding each parameter with each value
     var qPairs = (0, exports.zip)(R.parameters, Q.parameters);
-    // TODOJON: Will have to adjust now that Literals have Parameters instead of just string values as params
     // These are variable bindings as maps e.g., {b1: 'C'}
-    // let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
-    var qMaps = qPairs.map(function (pair) {
-        return (0, exports.createBindingConstraint)(pair[0], pair[1], true);
-    });
+    var qMaps = qPairs.map(function (x) { return new Map().set(x[0], x[1]); });
     // If we have any bindings, we can evaluate them against Q and R's parameters
     if (B.length > 0) {
         for (var _i = 0, B_1 = B; _i < B_1.length; _i++) {
@@ -336,7 +333,7 @@ var chooseAction = function findActionThatSatisfiesQ(Q, actions, domain, B) {
             var effect = _b[_a];
             // If an effect matches the `action` Q, that means we have a match, and can perform
             // MGU to ensure we have a matching set of arguments/parameters
-            if (Q.action === aAdd.action && Q.operation === effect.operation) {
+            if (Q.action === effect.action && Q.operation === effect.operation) {
                 try {
                     var unifiers = (0, exports.MGU)(Q, effect, B);
                     var newBindingConstraints = unifiers.map(function (x) {
