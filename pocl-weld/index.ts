@@ -415,34 +415,6 @@ export let chooseAction = function findActionThatSatisfiesQ(
   }
 };
 
-// Here is an example action:
-// {
-//   action: 'move',
-//   parameters: [
-//     { parameter: 'b', type: null },
-//     { parameter: 't1', type: null },
-//     { parameter: 't2', type: null }
-//   ],
-//   precondition: [
-//   { operation: 'and', action: 'block', parameters: [ 'b' ] },
-//   { operation: '', action: 'table', parameters: [ 't1' ] },
-//   { operation: '', action: 'table', parameters: [ 't2' ] },
-//   { operation: '', action: 'on', parameters: [ 'b', 't1' ] },
-//   { operation: 'not', action: 'on', parameters: [ 'b', 't2' ] },
-//   { operation: '', action: 'clear', parameters: [ 'b' ] }
-// ],
-//   effect: [
-//   { operation: 'and', action: 'on', parameters: [ 'b', 't2' ] },
-//   { operation: 'not', action: 'on', parameters: [ 'b', 't1' ] }
-// ]
-// }
-// Given that everything is expressed within an object, how should I design the (non)codedesignation constraints?
-// maybe:
-// { operation: 'not', action: 'eq', parameters: [ 'b', 'y' ] }
-// { operation: '', action: 'eq', parameters: [ 't2', 'y' ] }
-// { action: 'eq' | 'noteq', }
-//
-
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
  * @param {Map<PropertyKey, Array>} plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
@@ -596,7 +568,7 @@ function POP(plan, agenda) {
     // 4. Update the goal set
     let agendaPrime = agenda.slice(1);
 
-    // This can potentially mutate both agendaPrime and bindingConstraintsPrime
+    // This can potentially mutate both agendaPrime and variableBindings
     updateAgendaAndContraints(action, actions, agendaPrime, variableBindings);
 
     // 5. causal link protection
