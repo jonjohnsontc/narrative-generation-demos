@@ -90,7 +90,7 @@ const actionArray = parsed.blocksDomain.actions;
 const expectedAction = parsed.blocksDomain.actions[0];
 test("chooseAction selects action which satisfies binding constraints", () => {
   expect(pocl.chooseAction(Q, [], actionArray, [])).toStrictEqual({
-    action: { ...expectedAction, action: `${expectedAction.action} - b,t2` },
+    action: { ...expectedAction, name: `${expectedAction.name} - b,t2` },
     newBindingConstraints: [
       {
         bindingConstraint: { assignee: "C", assignor: "b", equal: true },
@@ -105,7 +105,7 @@ test("chooseAction selects action which satisfies binding constraints", () => {
 });
 
 const expectedUpdatedAction = {
-  action: "move",
+  name: "move",
   parameters: [
     { parameter: "b-1", type: null },
     { parameter: "t1-1", type: null },
@@ -161,8 +161,21 @@ test("updateAgendaAndContraints successfully updates agenda and constraints with
     agenda,
     bindConstraints
   );
-  // There should be two binding constraints added, the two "neq" actions above
-  expect(bindConstraints.get("b-1≠t-1")).toEqual(expect.anything())
-  expect(bindConstraints.get("b-1≠t-2")).toEqual(expect.anything())
+  // There should be two binding constraints added, the two "neq" actions above.
+  expect(bindConstraints.get("b-1≠t-1")).toEqual(expect.anything());
+  expect(bindConstraints.get("b-1≠t-2")).toEqual(expect.anything());
   expect(agenda).toHaveLength(9);
+});
+
+const someActionsWithVars = [...parsed.blocksDomain.actions];
+const someStates = [...parsed.blocksProblem.states];
+
+// TODO: This will need to change when I define specs for a plan
+const fakePlanWithCoveredVars = {
+  actions: someActionsWithVars.concat(someStates),
+  order: "hey dude",
+  links: "good stuff",
+};
+test("findParamDiff returns the difference in params between all variable actions", () => {
+  expect(pocl.findParamDiff(fakePlanWithCoveredVars)).toEqual(new Set());
 });

@@ -14,15 +14,26 @@ type Literal = {
 };
 
 type Action = {
-  action: string;
+  name: string;
   parameters: readonly ActionParam[];
   precondition: readonly Literal[];
   effect: readonly Literal[];
 };
 
+// TODO: Right now, this represents the first and last state of the problem
+type State = {
+  name: string;
+  actions: readonly Literal[]
+}
+
 type ActionParam = {
   parameter: string;
   type: string | null;
+}
+
+type AgendaItem = {
+  q: Literal,
+  name: string
 };
 
 type CausalLink = {
@@ -50,6 +61,32 @@ export let zip = (array1, array2) => {
   }
   return pairs;
 };
+
+// TODO: I can probably delete this 
+export let pullLiteralParams = function pullLiteralParamsFromAction(action: Action, type: string): string[] {
+  let paramList = []
+  for (let lit of action[type]) {
+    for (let param of lit.parameters) {
+      paramList.push(param);
+    }
+  }
+  return paramList
+}
+// TODO: I can probably delete this 
+// TODO: Should probabaly create a partial order plan type to statically analyze plan var
+export let findParamDiff = function findDiffBetweenEffectsAndPreconditions(plan): Set<string> {
+  let filterActions = plan.actions.filter(action => action.hasOwnProperty('parameters') === true);
+  
+  let effects = filterActions.flatMap(action => pullLiteralParams(action, "effect"));
+  let preconditions = filterActions.flatMap(action => pullLiteralParams(action, "precondition"));
+
+  // TODO: Is this even worth doing? Is it too wasteful (creating a set just to filter values)
+  let setEffects = new Set(effects);
+  let setPreconditions = new Set(preconditions);
+
+  return new Set([...setEffects].filter(val => !setPreconditions.has(val)));
+}
+
 
 /**
  * Updates action with new parameters to correspond to Weld on binding constraints
@@ -92,7 +129,7 @@ export let updateAction = function updateActionVariables(
   let newEffects = action.effect.map((x) => updateLiteral(x, currentParams));
 
   let updatedAction = {
-    action: action.action,
+    name: action.name,
     parameters: newParameters,
     precondition: newPreconditions,
     effect: newEffects,
@@ -192,6 +229,18 @@ export let createBindConstrFromUnifier =
     // A binding contstraint from unifiers is always true, because unifiers are always equal
     return createBindingConstraint(assignor, assignee, true);
   };
+/** 
+ * Pushes Literal and reference action (name) to the agenda passed through, mutating the agenda.
+ * @param agenda
+ * @param Q
+ * @param name
+*/
+export let pushToAgenda = function addItemToAgenda(agenda: AgendaItem[], q: Literal, name: string) {
+  agenda.push({
+    q: q,
+    name: name
+  })
+}
 /**
  * Conditionally updates agenda and binding constraints if the action passed
  * through has not yet been added to the plan
@@ -199,10 +248,10 @@ export let createBindConstrFromUnifier =
 export let updateAgendaAndContraints = function condUpdateAgendaAndConstraints(
   action: Action,
   actions: Action[],
-  agenda: Literal[],
+  agenda: AgendaItem[],
   bindingConstraints: BindingMap
 ) {
-  if (actions.find((x: Action) => x.action === action.action) !== undefined) {
+  if (actions.find((x: Action) => x.name === action.name) !== undefined) {
     let nonCodeDesignationConstr = action.precondition.filter(
       (lit) => lit.action === "neq"
     );
@@ -215,7 +264,10 @@ export let updateAgendaAndContraints = function condUpdateAgendaAndConstraints(
 
     // This is deterministic (as long as the order of preconditions doesn't change)
     // but this is another thing that could possibly be ordered explicitly
-    agenda.push(...action.precondition.filter((lit) => lit.action !== "neq"));
+    let codeDesignationConstr = action.precondition.filter((lit) => lit.action !== "neq");
+    for (let constr of codeDesignationConstr) {
+      pushToAgenda(agenda, constr, action.name)
+    }
   }
 };
 export let checkBindings = function checkBindingsForConflict(
@@ -400,8 +452,8 @@ let verifyPreconditions = function checkAllPreconditions(
           let newBindingConstraints = unifiers.map((x) =>
             createBindConstrFromUnifier(x)
           );
-          let newName = `${aAdd.action} - ${effect.parameters}`;
-          let aAddNewName = { ...aAdd, action: newName };
+          let newName = `${aAdd.name} - ${effect.parameters}`;
+          let aAddNewName = { ...aAdd, name: newName };
 
           // the action needs to be returned to add to A
           // newConstraints need to be returned to be added to B
@@ -424,47 +476,48 @@ let verifyPreconditions = function checkAllPreconditions(
   }
 };
 
+// If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
+// if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
+// and before the goal step (aInf)
+export let updateOrderingConstraints = (aAdd: Action, aNeed, AOLArray) => {
+  let actions = AOLArray.actions.slice();
+  let orderingConstraintPrime;
+  if (actions.find((x) => (x.name === aAdd.name) == null)) {
+    // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
+    // but given that assumption we create another constraint with name as first step
+    // and tail as the new action
+    let newConstraint = [
+      {
+        name: aAdd.name,
+        tail: "goal",
+      },
+      {
+        name: "init",
+        tail: aAdd.name,
+      },
+    ];
+    orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+  } else {
+    // if the action isn't new to the plan (AOLArray)
+    let newConstraint = {
+      name: aAdd.name,
+      tail: aNeed.name,
+    };
+    orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+  }
+  // I'm arbitrarily sorting by name here, so all the ordering constraints
+  // will be grouped as such. I don't think this is important if my assumption
+  // about ordering constraint construction with lesser than pairs (name < tail) is true
+  return orderingConstraintPrime.sort((a, b) => a.name - b.name);
+};
+
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
- * @param {Map<PropertyKey, Array>} plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
- * @param {Array} agenda
- * @returns {Map<PropertyKey, Array>} A complete ordered plan
+ * @param plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
+ * @param agenda
+ * @returns  A complete ordered plan
  */
-function POP(plan, agenda) {
-  // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
-  // if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
-  // and before the goal step (aInf)
-  let updateOrderingConstraints = (aAdd, aNeed, AOLArray) => {
-    let actions = AOLArray.actions.slice();
-    let orderingConstraintPrime;
-    if (actions.find((x) => (x.name === aAdd.name) == null)) {
-      // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
-      // but given that assumption we create another constraint with name as first step
-      // and tail as the new action
-      let newConstraint = [
-        {
-          name: aAdd.name,
-          tail: "goal",
-        },
-        {
-          name: "init",
-          tail: aAdd.name,
-        },
-      ];
-      orderingConstraintPrime = AOLArray.order.concat(newConstraint);
-    } else {
-      // if the action isn't new to the plan (AOLArray)
-      let newConstraint = {
-        name: aAdd.name,
-        tail: aNeed.name,
-      };
-      orderingConstraintPrime = AOLArray.order.concat(newConstraint);
-    }
-    // I'm arbitrarily sorting by name here, so all the ordering constraints
-    // will be grouped as such. I don't think this is important if my assumption
-    // about ordering constraint construction with lesser than pairs (name < tail) is true
-    return orderingConstraintPrime.sort((a, b) => a.name - b.name);
-  };
+function POP(plan, agenda, domain) {
   /**
    * Create a causal link
    * @param {any} creator The Action that spawned
@@ -496,14 +549,14 @@ function POP(plan, agenda) {
     };
   };
 
-  let checkForThreats = (action, orderingConstraints, causalLinks) => {
+  let checkForThreats = (action: Action, variableBindings: VariableBinding[], orderingConstraints, causalLinks) => {
     // Within each causal link, we need to check to see if it's 'Q' matches the opposite
     // of any effects within the action we just added.
     let newOrderingConstraints = orderingConstraints.slice();
     for (let link of causalLinks) {
       // Because it's a single action, I don't know if it's possible to return more than
       // one result to potentialThreats
-      let potentiaThreats = action.effects.filter(
+      let potentiaThreats = action.effect.filter(
         (x) => x === `-${link.preposition}`
       );
       if (potentiaThreats.length !== 0) {
@@ -536,10 +589,19 @@ function POP(plan, agenda) {
     }
     return newOrderingConstraints;
   };
-  // 1. If agenda is empty return <A, O, L>
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
-  // in the effects of an operator be included in the preconditions of an operator
-  if (agenda.length === 0) {
+  // in the effects of an operator be included in the preconditions of an operator.
+  // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could 
+  //   make when reading in a problem and domain/constructing the space
+  // TODO: Need to also check whether all of the variables in the effects of an operator are covered in the
+  // preconditions of an operator
+  // how do i know a variable is being used?
+  // - it's listed in an actions' effects or preconditions
+  // - it's not one of the constants being used in the initial action
+  let diff = findParamDiff(plan)
+
+  // 1. If agenda is empty, and all preconditions and effects are covered, return <A, O, L>
+  if (agenda.length === 0 && diff.size === 0) {
     return plan;
   } else {
     // destructuring plan
@@ -548,7 +610,7 @@ function POP(plan, agenda) {
     // 2. Goal selection
     // we choose an item in the agenda. right now we're selecting the first item
     // but it doesn't need to be. It's destructured into Q which is a constant, and
-    // `aNeed` which
+    // `aNeed` which is the action that's precondition is Q
     let { q, aNeed } = agenda[0];
 
     // 3. Action selection
@@ -560,13 +622,15 @@ function POP(plan, agenda) {
       variableBindings
     );
 
+    // TODO: This whole group should be a conditional;
+    // if the action is from the domain/has variables to replace
     let actionPrime = updateAction(action);
     let domainPrime = replaceAction(domain, actionPrime);
+    let actionsPrime = actions.concat(action);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = updateCausalLinks(links, action, q);
     let orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
-    let actionsPrime = plan.actions.concat(action);
 
     // We mutate the original variableBindings, unlike all the other parts of the plan
     updateBindingConstraints(variableBindings, newBindingConstraints);
@@ -578,7 +642,7 @@ function POP(plan, agenda) {
     updateAgendaAndContraints(action, actions, agendaPrime, variableBindings);
 
     // 5. causal link protection
-    orderConstrPrime = checkForThreats(action, orderConstrPrime, linksPrime);
+    orderConstrPrime = checkForThreats(action, variableBindings, orderConstrPrime, linksPrime);
 
     // 6. recursive invocation
     POP(

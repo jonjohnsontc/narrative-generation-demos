@@ -10,8 +10,17 @@ var __assign = (this && this.__assign) || function () {
     };
     return __assign.apply(this, arguments);
 };
+var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
+    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+        if (ar || !(i in from)) {
+            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+            ar[i] = from[i];
+        }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
+};
 exports.__esModule = true;
-exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.zip = void 0;
+exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.findParamDiff = exports.pullLiteralParams = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -28,6 +37,31 @@ var zip = function (array1, array2) {
     return pairs;
 };
 exports.zip = zip;
+// TODO: I can probably delete this 
+var pullLiteralParams = function pullLiteralParamsFromAction(action, type) {
+    var paramList = [];
+    for (var _i = 0, _a = action[type]; _i < _a.length; _i++) {
+        var lit = _a[_i];
+        for (var _b = 0, _c = lit.parameters; _b < _c.length; _b++) {
+            var param = _c[_b];
+            paramList.push(param);
+        }
+    }
+    return paramList;
+};
+exports.pullLiteralParams = pullLiteralParams;
+// TODO: I can probably delete this 
+// TODO: Should probabaly create a partial order plan type to statically analyze plan var
+var findParamDiff = function findDiffBetweenEffectsAndPreconditions(plan) {
+    var filterActions = plan.actions.filter(function (action) { return action.hasOwnProperty('parameters') === true; });
+    var effects = filterActions.flatMap(function (action) { return (0, exports.pullLiteralParams)(action, "effect"); });
+    var preconditions = filterActions.flatMap(function (action) { return (0, exports.pullLiteralParams)(action, "precondition"); });
+    // TODO: Is this even worth doing? Is it too wasteful (creating a set just to filter values)
+    var setEffects = new Set(effects);
+    var setPreconditions = new Set(preconditions);
+    return new Set(__spreadArray([], setEffects, true).filter(function (val) { return !setPreconditions.has(val); }));
+};
+exports.findParamDiff = findParamDiff;
 /**
  * Updates action with new parameters to correspond to Weld on binding constraints
  * @param action An action whos parameters need to be updated
@@ -70,7 +104,7 @@ var updateAction = function updateActionVariables(action) {
     });
     var newEffects = action.effect.map(function (x) { return updateLiteral(x, currentParams); });
     var updatedAction = {
-        action: action.action,
+        name: action.name,
         parameters: newParameters,
         precondition: newPreconditions,
         effect: newEffects
@@ -160,11 +194,24 @@ var createBindConstrFromUnifier = function createBindingConstraintFromUnifiers(u
 };
 exports.createBindConstrFromUnifier = createBindConstrFromUnifier;
 /**
+ * Pushes Literal and reference action (name) to the agenda passed through, mutating the agenda.
+ * @param agenda
+ * @param Q
+ * @param name
+*/
+var pushToAgenda = function addItemToAgenda(agenda, q, name) {
+    agenda.push({
+        q: q,
+        name: name
+    });
+};
+exports.pushToAgenda = pushToAgenda;
+/**
  * Conditionally updates agenda and binding constraints if the action passed
  * through has not yet been added to the plan
  * */
 var updateAgendaAndContraints = function condUpdateAgendaAndConstraints(action, actions, agenda, bindingConstraints) {
-    if (actions.find(function (x) { return x.action === action.action; }) !== undefined) {
+    if (actions.find(function (x) { return x.name === action.name; }) !== undefined) {
         var nonCodeDesignationConstr = action.precondition.filter(function (lit) { return lit.action === "neq"; });
         var newConstraints = nonCodeDesignationConstr.map(function (x) {
             return (0, exports.createBindingConstraint)(x.parameters[0], x.parameters[1], false);
@@ -172,7 +219,11 @@ var updateAgendaAndContraints = function condUpdateAgendaAndConstraints(action, 
         (0, exports.updateBindingConstraints)(bindingConstraints, newConstraints);
         // This is deterministic (as long as the order of preconditions doesn't change)
         // but this is another thing that could possibly be ordered explicitly
-        agenda.push.apply(agenda, action.precondition.filter(function (lit) { return lit.action !== "neq"; }));
+        var codeDesignationConstr = action.precondition.filter(function (lit) { return lit.action !== "neq"; });
+        for (var _i = 0, codeDesignationConstr_1 = codeDesignationConstr; _i < codeDesignationConstr_1.length; _i++) {
+            var constr = codeDesignationConstr_1[_i];
+            (0, exports.pushToAgenda)(agenda, constr, action.name);
+        }
     }
 };
 exports.updateAgendaAndContraints = updateAgendaAndContraints;
@@ -339,8 +390,8 @@ var chooseAction = function findActionThatSatisfiesQ(Q, actions, domain, B) {
                     var newBindingConstraints = unifiers.map(function (x) {
                         return (0, exports.createBindConstrFromUnifier)(x);
                     });
-                    var newName = aAdd.action + " - " + effect.parameters;
-                    var aAddNewName = __assign(__assign({}, aAdd), { action: newName });
+                    var newName = aAdd.name + " - " + effect.parameters;
+                    var aAddNewName = __assign(__assign({}, aAdd), { name: newName });
                     // the action needs to be returned to add to A
                     // newConstraints need to be returned to be added to B
                     return {
@@ -364,48 +415,49 @@ var chooseAction = function findActionThatSatisfiesQ(Q, actions, domain, B) {
     }
 };
 exports.chooseAction = chooseAction;
+// If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
+// if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
+// and before the goal step (aInf)
+var updateOrderingConstraints = function (aAdd, aNeed, AOLArray) {
+    var actions = AOLArray.actions.slice();
+    var orderingConstraintPrime;
+    if (actions.find(function (x) { return (x.name === aAdd.name) == null; })) {
+        // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
+        // but given that assumption we create another constraint with name as first step
+        // and tail as the new action
+        var newConstraint = [
+            {
+                name: aAdd.name,
+                tail: "goal"
+            },
+            {
+                name: "init",
+                tail: aAdd.name
+            },
+        ];
+        orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+    }
+    else {
+        // if the action isn't new to the plan (AOLArray)
+        var newConstraint = {
+            name: aAdd.name,
+            tail: aNeed.name
+        };
+        orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+    }
+    // I'm arbitrarily sorting by name here, so all the ordering constraints
+    // will be grouped as such. I don't think this is important if my assumption
+    // about ordering constraint construction with lesser than pairs (name < tail) is true
+    return orderingConstraintPrime.sort(function (a, b) { return a.name - b.name; });
+};
+exports.updateOrderingConstraints = updateOrderingConstraints;
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
- * @param {Map<PropertyKey, Array>} plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
- * @param {Array} agenda
- * @returns {Map<PropertyKey, Array>} A complete ordered plan
+ * @param plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
+ * @param agenda
+ * @returns  A complete ordered plan
  */
-function POP(plan, agenda) {
-    // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
-    // if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
-    // and before the goal step (aInf)
-    var updateOrderingConstraints = function (aAdd, aNeed, AOLArray) {
-        var actions = AOLArray.actions.slice();
-        var orderingConstraintPrime;
-        if (actions.find(function (x) { return (x.name === aAdd.name) == null; })) {
-            // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
-            // but given that assumption we create another constraint with name as first step
-            // and tail as the new action
-            var newConstraint = [
-                {
-                    name: aAdd.name,
-                    tail: "goal"
-                },
-                {
-                    name: "init",
-                    tail: aAdd.name
-                },
-            ];
-            orderingConstraintPrime = AOLArray.order.concat(newConstraint);
-        }
-        else {
-            // if the action isn't new to the plan (AOLArray)
-            var newConstraint = {
-                name: aAdd.name,
-                tail: aNeed.name
-            };
-            orderingConstraintPrime = AOLArray.order.concat(newConstraint);
-        }
-        // I'm arbitrarily sorting by name here, so all the ordering constraints
-        // will be grouped as such. I don't think this is important if my assumption
-        // about ordering constraint construction with lesser than pairs (name < tail) is true
-        return orderingConstraintPrime.sort(function (a, b) { return a.name - b.name; });
-    };
+function POP(plan, agenda, domain) {
     /**
      * Create a causal link
      * @param {any} creator The Action that spawned
@@ -434,14 +486,14 @@ function POP(plan, agenda) {
             tail: tail
         };
     };
-    var checkForThreats = function (action, orderingConstraints, causalLinks) {
+    var checkForThreats = function (action, variableBindings, orderingConstraints, causalLinks) {
         // Within each causal link, we need to check to see if it's 'Q' matches the opposite
         // of any effects within the action we just added.
         var newOrderingConstraints = orderingConstraints.slice();
         var _loop_1 = function (link) {
             // Because it's a single action, I don't know if it's possible to return more than
             // one result to potentialThreats
-            var potentiaThreats = action.effects.filter(function (x) { return x === "-" + link.preposition; });
+            var potentiaThreats = action.effect.filter(function (x) { return x === "-" + link.preposition; });
             if (potentiaThreats.length !== 0) {
                 // If there exists a threat from the action, we need to check the action to see if it's new
                 if (orderingConstraints.filter(function (x) { return x.name === action.name; }).length === 0) {
@@ -470,29 +522,39 @@ function POP(plan, agenda) {
         }
         return newOrderingConstraints;
     };
-    // 1. If agenda is empty return <A, O, L>
     // We need to ensure that initial state contains no variable bindings, and all variables mentioned
-    // in the effects of an operator be included in the preconditions of an operator
-    if (agenda.length === 0) {
+    // in the effects of an operator be included in the preconditions of an operator.
+    // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could 
+    //   make when reading in a problem and domain/constructing the space
+    // TODO: Need to also check whether all of the variables in the effects of an operator are covered in the
+    // preconditions of an operator
+    // how do i know a variable is being used?
+    // - it's listed in an actions' effects or preconditions
+    // - it's not one of the constants being used in the initial action
+    var diff = (0, exports.findParamDiff)(plan);
+    // 1. If agenda is empty, and all preconditions and effects are covered, return <A, O, L>
+    if (agenda.length === 0 && diff.size === 0) {
         return plan;
     }
     else {
         // destructuring plan
-        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings, domain = plan.domain;
+        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings, domain_1 = plan.domain;
         // 2. Goal selection
         // we choose an item in the agenda. right now we're selecting the first item
         // but it doesn't need to be. It's destructured into Q which is a constant, and
-        // `aNeed` which
+        // `aNeed` which is the action that's precondition is Q
         var _a = agenda[0], q = _a.q, aNeed = _a.aNeed;
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
-        var _b = (0, exports.chooseAction)(q, actions, domain, variableBindings), action = _b.action, newBindingConstraints = _b.newBindingConstraints;
+        var _b = (0, exports.chooseAction)(q, actions, domain_1, variableBindings), action = _b.action, newBindingConstraints = _b.newBindingConstraints;
+        // TODO: This whole group should be a conditional;
+        // if the action is from the domain/has variables to replace
         var actionPrime = (0, exports.updateAction)(action);
-        var domainPrime = (0, exports.replaceAction)(domain, actionPrime);
+        var domainPrime = (0, exports.replaceAction)(domain_1, actionPrime);
+        var actionsPrime = actions.concat(action);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
         var linksPrime = updateCausalLinks(links, action, q);
-        var orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
-        var actionsPrime = plan.actions.concat(action);
+        var orderConstrPrime = (0, exports.updateOrderingConstraints)(action, aNeed, plan);
         // We mutate the original variableBindings, unlike all the other parts of the plan
         (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         // 4. Update the goal set
@@ -500,7 +562,7 @@ function POP(plan, agenda) {
         // This can potentially mutate both agendaPrime and variableBindings
         (0, exports.updateAgendaAndContraints)(action, actions, agendaPrime, variableBindings);
         // 5. causal link protection
-        orderConstrPrime = checkForThreats(action, orderConstrPrime, linksPrime);
+        orderConstrPrime = checkForThreats(action, variableBindings, orderConstrPrime, linksPrime);
         // 6. recursive invocation
         POP({
             actions: actionsPrime,
