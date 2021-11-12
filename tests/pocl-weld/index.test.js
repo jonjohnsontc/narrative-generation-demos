@@ -166,16 +166,3 @@ test("updateAgendaAndContraints successfully updates agenda and constraints with
   expect(bindConstraints.get("b-1≠t-2")).toEqual(expect.anything());
   expect(agenda).toHaveLength(9);
 });
-
-const someActionsWithVars = [...parsed.blocksDomain.actions];
-const someStates = [...parsed.blocksProblem.states];
-
-// TODO: This will need to change when I define specs for a plan
-const fakePlanWithCoveredVars = {
-  actions: someActionsWithVars.concat(someStates),
-  order: "hey dude",
-  links: "good stuff",
-};
-test("findParamDiff returns the difference in params between all variable actions", () => {
-  expect(pocl.findParamDiff(fakePlanWithCoveredVars)).toEqual(new Set());
-});

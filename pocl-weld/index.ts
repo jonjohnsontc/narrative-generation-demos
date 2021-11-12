@@ -23,17 +23,17 @@ type Action = {
 // TODO: Right now, this represents the first and last state of the problem
 type State = {
   name: string;
-  actions: readonly Literal[]
-}
+  actions: readonly Literal[];
+};
 
 type ActionParam = {
   parameter: string;
   type: string | null;
-}
+};
 
 type AgendaItem = {
-  q: Literal,
-  name: string
+  q: Literal;
+  name: string;
 };
 
 type CausalLink = {
@@ -62,31 +62,18 @@ export let zip = (array1, array2) => {
   return pairs;
 };
 
-// TODO: I can probably delete this 
-export let pullLiteralParams = function pullLiteralParamsFromAction(action: Action, type: string): string[] {
-  let paramList = []
-  for (let lit of action[type]) {
-    for (let param of lit.parameters) {
-      paramList.push(param);
+export let isLiteralEqual = (lit1:Literal, lit2:Literal): boolean => {
+  if (lit1.operation === lit2.operation && lit1.action === lit2.action) {
+    for (let i = 0; i< lit1.parameters.length; i++) {
+      if (lit1.parameters[i] !== lit2.parameters[1]) {
+        return false
+      }
     }
+    return true
+  } else {
+    return false
   }
-  return paramList
 }
-// TODO: I can probably delete this 
-// TODO: Should probabaly create a partial order plan type to statically analyze plan var
-export let findParamDiff = function findDiffBetweenEffectsAndPreconditions(plan): Set<string> {
-  let filterActions = plan.actions.filter(action => action.hasOwnProperty('parameters') === true);
-  
-  let effects = filterActions.flatMap(action => pullLiteralParams(action, "effect"));
-  let preconditions = filterActions.flatMap(action => pullLiteralParams(action, "precondition"));
-
-  // TODO: Is this even worth doing? Is it too wasteful (creating a set just to filter values)
-  let setEffects = new Set(effects);
-  let setPreconditions = new Set(preconditions);
-
-  return new Set([...setEffects].filter(val => !setPreconditions.has(val)));
-}
-
 
 /**
  * Updates action with new parameters to correspond to Weld on binding constraints
@@ -229,18 +216,22 @@ export let createBindConstrFromUnifier =
     // A binding contstraint from unifiers is always true, because unifiers are always equal
     return createBindingConstraint(assignor, assignee, true);
   };
-/** 
+/**
  * Pushes Literal and reference action (name) to the agenda passed through, mutating the agenda.
  * @param agenda
  * @param Q
  * @param name
-*/
-export let pushToAgenda = function addItemToAgenda(agenda: AgendaItem[], q: Literal, name: string) {
+ */
+export let pushToAgenda = function addItemToAgenda(
+  agenda: AgendaItem[],
+  q: Literal,
+  name: string
+) {
   agenda.push({
     q: q,
-    name: name
-  })
-}
+    name: name,
+  });
+};
 /**
  * Conditionally updates agenda and binding constraints if the action passed
  * through has not yet been added to the plan
@@ -264,9 +255,11 @@ export let updateAgendaAndContraints = function condUpdateAgendaAndConstraints(
 
     // This is deterministic (as long as the order of preconditions doesn't change)
     // but this is another thing that could possibly be ordered explicitly
-    let codeDesignationConstr = action.precondition.filter((lit) => lit.action !== "neq");
+    let codeDesignationConstr = action.precondition.filter(
+      (lit) => lit.action !== "neq"
+    );
     for (let constr of codeDesignationConstr) {
-      pushToAgenda(agenda, constr, action.name)
+      pushToAgenda(agenda, constr, action.name);
     }
   }
 };
@@ -325,9 +318,9 @@ export let updateBindingConstraints = function condUpdateBindingConstraints(
   newBindings: Array<{ bindingConstraint: VariableBinding; key: string }>
 ) {
   for (let binding of newBindings) {
-   if (currentBindings.has(binding.key) === false) {
-     currentBindings.set(binding.key, binding.bindingConstraint)
-   }
+    if (currentBindings.has(binding.key) === false) {
+      currentBindings.set(binding.key, binding.bindingConstraint);
+    }
   }
 };
 
@@ -340,7 +333,7 @@ export let updateBindingConstraints = function condUpdateBindingConstraints(
  * @param {any} B Vector of (non)codedesignation constraints
  * @returns {any} Most general unifier of literals
  */
- export let MGU = function findMostGenerialUnifier(Q, R, B) {
+export let MGU = function findMostGenerialUnifier(Q, R, B) {
   // For the most general unifier, let's just assume Q's parameters
   /** @type {Array} */
   let QArgs = Q.parameters;
@@ -429,7 +422,7 @@ let verifyPreconditions = function checkAllPreconditions(
  * @param domain
  * @returns An object containing an action, along with an array of binding constraints
  */
- export let chooseAction = function findActionThatSatisfiesQ(
+export let chooseAction = function findActionThatSatisfiesQ(
   Q: Literal,
   actions: Action[],
   domain: Action[],
@@ -549,16 +542,27 @@ function POP(plan, agenda, domain) {
     };
   };
 
-  let checkForThreats = (action: Action, variableBindings: VariableBinding[], orderingConstraints, causalLinks) => {
+  let getOppositeLiteral = (lit: Literal) => {
+    let opposite = lit.operation === "not" ? "" : "not";
+    return { ...lit, operation: opposite };
+  };
+
+  let checkForThreats = (
+    action: Action,
+    variableBindings: VariableBinding[],
+    orderingConstraints,
+    causalLinks
+  ) => {
     // Within each causal link, we need to check to see if it's 'Q' matches the opposite
     // of any effects within the action we just added.
     let newOrderingConstraints = orderingConstraints.slice();
     for (let link of causalLinks) {
       // Because it's a single action, I don't know if it's possible to return more than
       // one result to potentialThreats
+      let opEffect = getOppositeLiteral(link.preposition);
       let potentiaThreats = action.effect.filter(
-        (x) => x === `-${link.preposition}`
-      );
+        (x) => isLiteralEqual(x, opEffect)
+      )
       if (potentiaThreats.length !== 0) {
         // If there exists a threat from the action, we need to check the action to see if it's new
         if (
@@ -588,20 +592,16 @@ function POP(plan, agenda, domain) {
       }
     }
     return newOrderingConstraints;
+    // TODO: This should return failure if the threat still exists., ie the threat
+    // is not ordered after the `consumedBy` or prior to the `createdBy` link
   };
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
-  // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could 
+  // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
   //   make when reading in a problem and domain/constructing the space
-  // TODO: Need to also check whether all of the variables in the effects of an operator are covered in the
-  // preconditions of an operator
-  // how do i know a variable is being used?
-  // - it's listed in an actions' effects or preconditions
-  // - it's not one of the constants being used in the initial action
-  let diff = findParamDiff(plan)
 
   // 1. If agenda is empty, and all preconditions and effects are covered, return <A, O, L>
-  if (agenda.length === 0 && diff.size === 0) {
+  if (agenda.length === 0) {
     return plan;
   } else {
     // destructuring plan
@@ -642,7 +642,12 @@ function POP(plan, agenda, domain) {
     updateAgendaAndContraints(action, actions, agendaPrime, variableBindings);
 
     // 5. causal link protection
-    orderConstrPrime = checkForThreats(action, variableBindings, orderConstrPrime, linksPrime);
+    orderConstrPrime = checkForThreats(
+      action,
+      variableBindings,
+      orderConstrPrime,
+      linksPrime
+    );
 
     // 6. recursive invocation
     POP(
