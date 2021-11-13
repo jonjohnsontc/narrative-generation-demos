@@ -166,3 +166,36 @@ test("updateAgendaAndContraints successfully updates agenda and constraints with
   expect(bindConstraints.get("b-1≠t-2")).toEqual(expect.anything());
   expect(agenda).toHaveLength(9);
 });
+
+
+const initialOrdConstraints = [
+  {name: "init", tail: "goal"},
+  {name: "init", tail: "move - a, b"},
+  {name: "init", tail: "move - c, a"},
+  {name: "move - a, b", tail: "move - c, a"},
+  {name: "move - a, b", tail: "goal"},
+  {name: "move - c, a", tail: "goal"}
+]
+const initialBindConstraints = new Map()
+initialBindConstraints.set("a=t1-1", {equal: true, assignor: "t1-1", assignee: "a"})
+
+const threateningAction = {
+  name: "move - b, c",
+  parameters: [
+    { parameter: "b-1", type: null },
+    { parameter: "t1-1", type: null },
+    { parameter: "t2-1", type: null },
+  ],
+  precondition: [
+    { operation: "and", action: "block", parameters: ["b-1"] },
+    { operation: "", action: "table", parameters: ["t1-1"] },
+    { operation: "", action: "table", parameters: ["t2-1"] },
+    { operation: "", action: "on", parameters: ["b-1", "t1-1"] },
+    { operation: "not", action: "on", parameters: ["b-1", "t2-1"] },
+    { operation: "", action: "clear", parameters: ["b-1"] },
+  ],
+  effect: [
+    { operation: "and", action: "on", parameters: ["b-1", "t2-1"] },
+    { operation: "not", action: "on", parameters: ["a", "b"] },
+  ],
+}

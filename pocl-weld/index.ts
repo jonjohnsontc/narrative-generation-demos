@@ -7,6 +7,11 @@ type VariableBinding = {
 
 type BindingMap = Map<PropertyKey, VariableBinding>;
 
+type OrderingConstraint = {
+  name: string,
+  tail: string
+}
+
 type Literal = {
   operation: string;
   action: string;
@@ -549,18 +554,46 @@ function POP(plan, agenda, domain) {
 
   let checkForThreats = (
     action: Action,
-    variableBindings: VariableBinding[],
     orderingConstraints,
-    causalLinks
+    causalLinks: CausalLink[],
+    variableBindings: VariableBinding[]
   ) => {
+
+    // First, we need to bind the literal variable to the action's effect parameters
+    // That way we can match a causal link with a threat just by comparing Literal objects
+    let replaceMap = new Map();
+    for (let param of action.parameters) {
+      for (let binding of variableBindings) {
+        if (binding.assignor === param.parameter) {
+          replaceMap.set(param.parameter, binding.assignor)
+          break
+        } else if (binding.assignee === param.parameter) {
+          replaceMap.set(param.parameter, binding.assignee)
+          break
+        } 
+      }
+    }
+    // As far as I know, we only need to bind the effects to their variable counterpart
+    let boundEffect = [];
+    for (let effect of action.effect) {
+      for (let param of effect.parameters) {
+        boundEffect.push(replaceMap.get(param))
+      }
+    }
+    let boundAction = {
+      ...action,
+      effect: boundEffect
+    };
+
     // Within each causal link, we need to check to see if it's 'Q' matches the opposite
     // of any effects within the action we just added.
     let newOrderingConstraints = orderingConstraints.slice();
     for (let link of causalLinks) {
       // Because it's a single action, I don't know if it's possible to return more than
       // one result to potentialThreats
+      
       let opEffect = getOppositeLiteral(link.preposition);
-      let potentiaThreats = action.effect.filter(
+      let potentiaThreats = boundAction.effect.filter(
         (x) => isLiteralEqual(x, opEffect)
       )
       if (potentiaThreats.length !== 0) {
@@ -591,9 +624,9 @@ function POP(plan, agenda, domain) {
         }
       }
     }
-    return newOrderingConstraints;
     // TODO: This should return failure if the threat still exists., ie the threat
     // is not ordered after the `consumedBy` or prior to the `createdBy` link
+    return newOrderingConstraints;
   };
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
@@ -644,9 +677,9 @@ function POP(plan, agenda, domain) {
     // 5. causal link protection
     orderConstrPrime = checkForThreats(
       action,
-      variableBindings,
       orderConstrPrime,
-      linksPrime
+      linksPrime,
+      variableBindings
     );
 
     // 6. recursive invocation
