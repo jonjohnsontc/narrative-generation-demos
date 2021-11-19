@@ -49,9 +49,11 @@ alphanum  = word:([a-zA-Z0-9]+) { return word.join('').replace(/[,:? ]/g, ''); }
 symbol    = (!delimiter .)+
 space     = [\n\r\t ] / comment
 paren     = "(" / ")"
-logicOp   = "and" / "not"
+logicOp   = "not"
 delimiter = paren / space
-comment   = ";" [a-zA-Z0-9\_\-\;\?\.\:\!\@\#\$\%\^\&\*\~\(\)\[\]\{\}\'\"\<\>\,\/\\ ]* [\n\r]
+
+/* moved "and" here from logicOp remove it from literal */
+comment   = ";" [a-zA-Z0-9\_\-\;\?\.\:\!\@\#\$\%\^\&\*\~\(\)\[\]\{\}\'\"\<\>\,\/\\ ]* [\n\r] / "and"
  
 parameter = param:word space*
 { return param.join('').replace(/[,:? ]/g, ''); }

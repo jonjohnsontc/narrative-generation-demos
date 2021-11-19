@@ -63,8 +63,8 @@ test("createBindConstrFromUnifier creates expected binding constraint from unifi
   );
 });
 
-const Q = { operation: "and", action: "on", parameters: ["C", "D"] };
-const R = { operation: "and", action: "on", parameters: ["a1", "a2"] };
+const Q = { operation: "", action: "on", parameters: ["C", "D"] };
+const R = { operation: "", action: "on", parameters: ["a1", "a2"] };
 const bindings = [
   { equal: true, assignor: "a1", assignee: "C" },
   { equal: false, assignor: "a2", assignee: "C" },
@@ -75,7 +75,7 @@ test("MGU returns most general unifier for move action successfully", () => {
   expect(pocl.MGU(Q, R, bindings)).toEqual(expectedUnifiers);
 });
 
-const badQ = { operation: "and", action: "on", parameters: ["C", "C"] };
+const badQ = { operation: "", action: "on", parameters: ["C", "C"] };
 test("MGU throws error that most general unifier can't be found because of binding constraints", () => {
   expect(() => pocl.MGU(badQ, R, bindings)).toThrow();
 });
@@ -112,7 +112,7 @@ const expectedUpdatedAction = {
     { parameter: "t2-1", type: null },
   ],
   precondition: [
-    { operation: "and", action: "block", parameters: ["b-1"] },
+    { operation: "", action: "block", parameters: ["b-1"] },
     { operation: "", action: "table", parameters: ["t1-1"] },
     { operation: "", action: "table", parameters: ["t2-1"] },
     { operation: "", action: "on", parameters: ["b-1", "t1-1"] },
@@ -120,7 +120,7 @@ const expectedUpdatedAction = {
     { operation: "", action: "clear", parameters: ["b-1"] },
   ],
   effect: [
-    { operation: "and", action: "on", parameters: ["b-1", "t2-1"] },
+    { operation: "", action: "on", parameters: ["b-1", "t2-1"] },
     { operation: "not", action: "on", parameters: ["b-1", "t1-1"] },
   ],
 };
@@ -142,7 +142,7 @@ const agenda = parsed.blocksProblem.states[1].actions;
 const newAction = {
   ...expectedUpdatedAction,
   precondition: [
-    { operation: "and", action: "block", parameters: ["b-1"] },
+    { operation: "", action: "block", parameters: ["b-1"] },
     { operation: "", action: "table", parameters: ["t1-1"] },
     { operation: "", action: "table", parameters: ["t2-1"] },
     { operation: "", action: "on", parameters: ["b-1", "t1-1"] },
@@ -167,18 +167,21 @@ test("updateAgendaAndContraints successfully updates agenda and constraints with
   expect(agenda).toHaveLength(9);
 });
 
+const testLit = {operation: "", action: "on", parameters: ["A", "B"]};
+test("getOppositeLiteral correctly outputs opposite literal", () => {
+  expect(pocl.getOppositeLiteral(testLit)).toEqual({operation: "not", action: "on", parameters: ["A", "B"]})
+})
+
+const testLit2 = {action: "on", operation: "", parameters: ["A", "B"]}
+test("isLiteralEqual returns true when literals are equal", () => {
+  expect(pocl.isLiteralEqual(testLit, testLit2)).toBe(true)
+})
 
 const initialOrdConstraints = [
-  {name: "init", tail: "goal"},
-  {name: "init", tail: "move - a, b"},
-  {name: "init", tail: "move - c, a"},
-  {name: "move - a, b", tail: "move - c, a"},
-  {name: "move - a, b", tail: "goal"},
-  {name: "move - c, a", tail: "goal"}
-]
-const initialBindConstraints = new Map()
-initialBindConstraints.set("a=t1-1", {equal: true, assignor: "t1-1", assignee: "a"})
-
+  { name: "init", tail: "goal" },
+  { name: "init", tail: "move - a,table" },
+  { name: "move - a,table", tail: "goal" },
+];
 const threateningAction = {
   name: "move - b, c",
   parameters: [
@@ -187,7 +190,7 @@ const threateningAction = {
     { parameter: "t2-1", type: null },
   ],
   precondition: [
-    { operation: "and", action: "block", parameters: ["b-1"] },
+    { operation: "", action: "block", parameters: ["b-1"] },
     { operation: "", action: "table", parameters: ["t1-1"] },
     { operation: "", action: "table", parameters: ["t2-1"] },
     { operation: "", action: "on", parameters: ["b-1", "t1-1"] },
@@ -195,7 +198,32 @@ const threateningAction = {
     { operation: "", action: "clear", parameters: ["b-1"] },
   ],
   effect: [
-    { operation: "and", action: "on", parameters: ["b-1", "t2-1"] },
-    { operation: "not", action: "on", parameters: ["a", "b"] },
+    { operation: "", action: "on", parameters: ["b-1", "t2-1"] },
+    { operation: "not", action: "on", parameters: ["b-1", "t1-1"] },
   ],
-}
+};
+const testBindings = new Map([
+  ["b-1=A", { equal: true, assignor: "b-1", assignee: "A" }],
+  ["t2-1=B", { equal: true, assignor: "t2-1", assignee: "B" }],
+  ["t1-1=C", { equal: true, assignor: "t1-1", assignee: "C" }],
+]);
+// TODO: There should be the following links:
+//        - any actions already placed and their "aNeed"
+//        - I think one should suffice for this first test
+const initialLinks = [
+  {
+    createdBy: "move - a,table",
+    consumedBy: "goal",
+    preposition: { operation: "not", action: "on", parameters: ["A", "B"] },
+  },
+];
+test("checkForThreats locates a potential threat given action passed, and creates ordering constraint to deal", () => {
+  let result = pocl.checkForThreats(
+    threateningAction,
+    initialOrdConstraints,
+    initialLinks,
+    testBindings
+  );
+  expect(result).toHaveLength(4)
+  expect(result.pop()).toEqual({"name": "move - b, c", "tail": "move - a,table"})
+});

@@ -10,17 +10,8 @@ var __assign = (this && this.__assign) || function () {
     };
     return __assign.apply(this, arguments);
 };
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
 exports.__esModule = true;
-exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.findParamDiff = exports.pullLiteralParams = exports.zip = void 0;
+exports.checkForThreats = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.isLiteralEqual = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -37,31 +28,20 @@ var zip = function (array1, array2) {
     return pairs;
 };
 exports.zip = zip;
-// TODO: I can probably delete this 
-var pullLiteralParams = function pullLiteralParamsFromAction(action, type) {
-    var paramList = [];
-    for (var _i = 0, _a = action[type]; _i < _a.length; _i++) {
-        var lit = _a[_i];
-        for (var _b = 0, _c = lit.parameters; _b < _c.length; _b++) {
-            var param = _c[_b];
-            paramList.push(param);
+var isLiteralEqual = function (lit1, lit2) {
+    if (lit1.operation === lit2.operation && lit1.action === lit2.action) {
+        for (var i = 0; i < lit1.parameters.length; i++) {
+            if (lit1.parameters[i] !== lit2.parameters[i]) {
+                return false;
+            }
         }
+        return true;
     }
-    return paramList;
+    else {
+        return false;
+    }
 };
-exports.pullLiteralParams = pullLiteralParams;
-// TODO: I can probably delete this 
-// TODO: Should probabaly create a partial order plan type to statically analyze plan var
-var findParamDiff = function findDiffBetweenEffectsAndPreconditions(plan) {
-    var filterActions = plan.actions.filter(function (action) { return action.hasOwnProperty('parameters') === true; });
-    var effects = filterActions.flatMap(function (action) { return (0, exports.pullLiteralParams)(action, "effect"); });
-    var preconditions = filterActions.flatMap(function (action) { return (0, exports.pullLiteralParams)(action, "precondition"); });
-    // TODO: Is this even worth doing? Is it too wasteful (creating a set just to filter values)
-    var setEffects = new Set(effects);
-    var setPreconditions = new Set(preconditions);
-    return new Set(__spreadArray([], setEffects, true).filter(function (val) { return !setPreconditions.has(val); }));
-};
-exports.findParamDiff = findParamDiff;
+exports.isLiteralEqual = isLiteralEqual;
 /**
  * Updates action with new parameters to correspond to Weld on binding constraints
  * @param action An action whos parameters need to be updated
@@ -198,7 +178,7 @@ exports.createBindConstrFromUnifier = createBindConstrFromUnifier;
  * @param agenda
  * @param Q
  * @param name
-*/
+ */
 var pushToAgenda = function addItemToAgenda(agenda, q, name) {
     agenda.push({
         q: q,
@@ -451,6 +431,134 @@ var updateOrderingConstraints = function (aAdd, aNeed, AOLArray) {
     return orderingConstraintPrime.sort(function (a, b) { return a.name - b.name; });
 };
 exports.updateOrderingConstraints = updateOrderingConstraints;
+var createOrderingConstraint = function (name, tail) {
+    return {
+        name: name,
+        tail: tail
+    };
+};
+var getOppositeLiteral = function (lit) {
+    var opposite = lit.operation === "not" ? "" : "not";
+    return __assign(__assign({}, lit), { operation: opposite });
+};
+exports.getOppositeLiteral = getOppositeLiteral;
+/**
+ * Checks for potential threats to the array of casual links based on the action chosen. If a threat exists,
+ * a new ordering constraint should be created to mitigate.
+ *
+ * @param action
+ * @param orderingConstraints
+ * @param causalLinks
+ * @param variableBindings
+ * @returns
+ */
+var checkForThreats = function checkForThreatsGivenConstraints(action, orderingConstraints, causalLinks, variableBindings) {
+    var replaceMap = new Map();
+    var justBindings = Array.from(variableBindings, function (_a) {
+        var name = _a[0], value = _a[1];
+        return value;
+    });
+    for (var _i = 0, _a = action.parameters; _i < _a.length; _i++) {
+        var param = _a[_i];
+        for (var index = 0; index < variableBindings.size; index++) {
+            if (justBindings[index].assignor === param.parameter) {
+                replaceMap.set(param.parameter, justBindings[index].assignee);
+                break;
+            }
+            else if (justBindings[index].assignee === param.parameter) {
+                replaceMap.set(param.parameter, justBindings[index].assignor);
+                break;
+            }
+        }
+    }
+    // First, we need to bind the literal variable to the action's effect parameters
+    // That way we can match a causal link with a threat just by comparing Literal objects
+    // As far as I know, we only need to bind the effects to their variable counterpart
+    var boundEffect = [];
+    for (var _b = 0, _c = action.effect; _b < _c.length; _b++) {
+        var effect = _c[_b];
+        var newEffect = __assign(__assign({}, effect), { parameters: [] });
+        for (var _d = 0, _e = effect.parameters; _d < _e.length; _d++) {
+            var param = _e[_d];
+            newEffect.parameters.push(replaceMap.get(param));
+        }
+        boundEffect.push(newEffect);
+    }
+    var boundAction = __assign(__assign({}, action), { effect: boundEffect });
+    /**
+     * Conditionally mutates/adds ordering constraints to current array of constraints,
+     * respecting the rule `O = O' U {A0 < Aadd < AInf}`.
+     *
+     * If the link being threatenened is connected to the first action, then the new ordering
+     * constraint is guaranteed to be occuring after the actions in the link. Otherwise,
+     * whether the new constraint occurs before or after the link is up to chance
+     * @param link
+     * @param action
+     * @param ordConstr
+     */
+    var condAddConstraints = function (link, action, ordConstr) {
+        if (link.createdBy === "init") {
+            ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
+        }
+        else if (link.consumedBy === "goal") {
+            ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
+        }
+        else {
+            if (coinFlip() === 0) {
+                ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
+            }
+            else {
+                ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
+            }
+        }
+    };
+    // Within each causal link, we need to check to see if it's 'Q' matches the opposite
+    // of any effects within the action we just added.
+    var allThreats = [];
+    var newOrderingConstraints = orderingConstraints.slice();
+    var _loop_1 = function (link) {
+        // Because it's a single action, I don't know if it's possible to return more than
+        // one result to potentialThreats
+        var opEffect = (0, exports.getOppositeLiteral)(link.preposition);
+        var potentiaThreats = boundAction.effect.filter(function (x) {
+            return (0, exports.isLiteralEqual)(x, opEffect);
+        });
+        if (potentiaThreats.length !== 0) {
+            // If there exists a threat from the action, we need to check the action to see if it's new
+            if (orderingConstraints.filter(function (x) { return x.name === action.name; }).length === 0) {
+                // If the `init` step is the creator of the causalLink, then we know that the
+                // threat needs to be ordered after it, because nothing can be ordered prior
+                // to that step
+                condAddConstraints(link, action, newOrderingConstraints);
+            }
+            else {
+                // If the action isn't new, we should check to see if
+                // the action has already been ordered. If it has, we can
+                // break out of the current loop, and go to the next potential threat
+                var isAlreadyOrdered = newOrderingConstraints.filter(function (x) {
+                    (x.name === action.name && x.tail === link.createdBy) ||
+                        (x.name === link.consumedBy && x.tail === action.name);
+                });
+                if (isAlreadyOrdered.length > 0) {
+                    return "break";
+                }
+                else {
+                    condAddConstraints(link, action, newOrderingConstraints);
+                }
+            }
+        }
+    };
+    for (var _f = 0, causalLinks_1 = causalLinks; _f < causalLinks_1.length; _f++) {
+        var link = causalLinks_1[_f];
+        var state_1 = _loop_1(link);
+        if (state_1 === "break")
+            break;
+    }
+    return newOrderingConstraints;
+    // TODO: This should return failure if the threat still exists., ie the threat
+    // is not ordered after the `consumedBy` or prior to the `createdBy` link
+};
+exports.checkForThreats = checkForThreats;
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
  * @param plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
@@ -473,67 +581,16 @@ function POP(plan, agenda, domain) {
             preposition: prep
         };
     };
-    var updateCausalLinks = function (causalLinks, action, Q) {
-        // I'm implying/setting the goal action name as "last"
-        // I'm not sure if all causal links made by new actions
-        // are always set to create a link like this, but I believe so
-        var newCausalLink = createCausalLink(action, "last", Q);
+    var updateCausalLinks = function (causalLinks, action, Q, aNeed) {
+        var newCausalLink = createCausalLink(action, aNeed, Q);
         return causalLinks.concat(newCausalLink);
-    };
-    var createOrderingConstraint = function (name, tail) {
-        return {
-            name: name,
-            tail: tail
-        };
-    };
-    var checkForThreats = function (action, variableBindings, orderingConstraints, causalLinks) {
-        // Within each causal link, we need to check to see if it's 'Q' matches the opposite
-        // of any effects within the action we just added.
-        var newOrderingConstraints = orderingConstraints.slice();
-        var _loop_1 = function (link) {
-            // Because it's a single action, I don't know if it's possible to return more than
-            // one result to potentialThreats
-            var potentiaThreats = action.effect.filter(function (x) { return x === "-" + link.preposition; });
-            if (potentiaThreats.length !== 0) {
-                // If there exists a threat from the action, we need to check the action to see if it's new
-                if (orderingConstraints.filter(function (x) { return x.name === action.name; }).length === 0) {
-                    // If the action is new, we need to make sure that the ordering constraints we add respect the
-                    // rule O = O' U {A0 < Aadd < AInf}. Therefore the ordering constraint needs to be b/w the
-                    // action and the consumer of causalLink
-                    if (link.createdBy.name === "first") {
-                        newOrderingConstraints.push(createOrderingConstraint(action.name, link.consumedBy.name));
-                    }
-                }
-                else {
-                    // If it's not new, we can can make either creator, or consumer the tail
-                    // In this case, I'll leave it to random "chance" by a coinFlip helper fn
-                    if (coinFlip() === 0) {
-                        newOrderingConstraints.push(createOrderingConstraint(action.name, link.createdBy.name));
-                    }
-                    else {
-                        newOrderingConstraints.push(createOrderingConstraint(action.name, link.consumedBy.name));
-                    }
-                }
-            }
-        };
-        for (var _i = 0, causalLinks_1 = causalLinks; _i < causalLinks_1.length; _i++) {
-            var link = causalLinks_1[_i];
-            _loop_1(link);
-        }
-        return newOrderingConstraints;
     };
     // We need to ensure that initial state contains no variable bindings, and all variables mentioned
     // in the effects of an operator be included in the preconditions of an operator.
-    // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could 
+    // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
     //   make when reading in a problem and domain/constructing the space
-    // TODO: Need to also check whether all of the variables in the effects of an operator are covered in the
-    // preconditions of an operator
-    // how do i know a variable is being used?
-    // - it's listed in an actions' effects or preconditions
-    // - it's not one of the constants being used in the initial action
-    var diff = (0, exports.findParamDiff)(plan);
     // 1. If agenda is empty, and all preconditions and effects are covered, return <A, O, L>
-    if (agenda.length === 0 && diff.size === 0) {
+    if (agenda.length === 0) {
         return plan;
     }
     else {
@@ -553,7 +610,7 @@ function POP(plan, agenda, domain) {
         var domainPrime = (0, exports.replaceAction)(domain_1, actionPrime);
         var actionsPrime = actions.concat(action);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
-        var linksPrime = updateCausalLinks(links, action, q);
+        var linksPrime = updateCausalLinks(links, action, q, aNeed);
         var orderConstrPrime = (0, exports.updateOrderingConstraints)(action, aNeed, plan);
         // We mutate the original variableBindings, unlike all the other parts of the plan
         (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
@@ -562,7 +619,7 @@ function POP(plan, agenda, domain) {
         // This can potentially mutate both agendaPrime and variableBindings
         (0, exports.updateAgendaAndContraints)(action, actions, agendaPrime, variableBindings);
         // 5. causal link protection
-        orderConstrPrime = checkForThreats(action, variableBindings, orderConstrPrime, linksPrime);
+        orderConstrPrime = (0, exports.checkForThreats)(action, orderConstrPrime, linksPrime, variableBindings);
         // 6. recursive invocation
         POP({
             actions: actionsPrime,
@@ -573,3 +630,8 @@ function POP(plan, agenda, domain) {
         }, agendaPrime);
     }
 }
+// TODO: The null plan of any given problem should be the following. I should
+// represent that somewhere to initially call POP()
+//    · two actions (a0 and aInf)
+//    · one ordering constraint (a0 to aInf)
+//    · zero causal links and variable bindings/binding constraints

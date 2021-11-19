@@ -8,9 +8,9 @@ type VariableBinding = {
 type BindingMap = Map<PropertyKey, VariableBinding>;
 
 type OrderingConstraint = {
-  name: string,
-  tail: string
-}
+  name: string;
+  tail: string;
+};
 
 type Literal = {
   operation: string;
@@ -42,9 +42,8 @@ type AgendaItem = {
 };
 
 type CausalLink = {
-  // TODO: Would strings be better here? I'd basically like a reference to an action
-  createdBy: Action; // action effect
-  consumedBy: Action; // action precondition
+  createdBy: string; // action effect
+  consumedBy: string; // action precondition
 
   // The preposition (or Q) needs to be a string representation of the effect/precondition
   // shared by the creator and consumer.
@@ -67,18 +66,18 @@ export let zip = (array1, array2) => {
   return pairs;
 };
 
-export let isLiteralEqual = (lit1:Literal, lit2:Literal): boolean => {
+export let isLiteralEqual = (lit1: Literal, lit2: Literal): boolean => {
   if (lit1.operation === lit2.operation && lit1.action === lit2.action) {
-    for (let i = 0; i< lit1.parameters.length; i++) {
-      if (lit1.parameters[i] !== lit2.parameters[1]) {
-        return false
+    for (let i = 0; i < lit1.parameters.length; i++) {
+      if (lit1.parameters[i] !== lit2.parameters[i]) {
+        return false;
       }
     }
-    return true
+    return true;
   } else {
-    return false
+    return false;
   }
-}
+};
 
 /**
  * Updates action with new parameters to correspond to Weld on binding constraints
@@ -508,7 +507,138 @@ export let updateOrderingConstraints = (aAdd: Action, aNeed, AOLArray) => {
   // about ordering constraint construction with lesser than pairs (name < tail) is true
   return orderingConstraintPrime.sort((a, b) => a.name - b.name);
 };
+let createOrderingConstraint = (
+  name: string,
+  tail: string
+): OrderingConstraint => {
+  return {
+    name: name,
+    tail: tail,
+  };
+};
 
+export let getOppositeLiteral = (lit: Literal) => {
+  let opposite = lit.operation === "not" ? "" : "not";
+  return { ...lit, operation: opposite };
+};
+/**
+ * Checks for potential threats to the array of casual links based on the action chosen. If a threat exists,
+ * a new ordering constraint should be created to mitigate.
+ *
+ * @param action
+ * @param orderingConstraints
+ * @param causalLinks
+ * @param variableBindings
+ * @returns
+ */
+export let checkForThreats = function checkForThreatsGivenConstraints(
+  action: Action,
+  orderingConstraints: OrderingConstraint[],
+  causalLinks: CausalLink[],
+  variableBindings: BindingMap
+) {
+  let replaceMap = new Map();
+  let justBindings = Array.from(variableBindings, ([name, value]) => value);
+  for (let param of action.parameters) {
+    for (let index = 0; index < variableBindings.size; index++) {
+      if (justBindings[index].assignor === param.parameter) {
+        replaceMap.set(param.parameter, justBindings[index].assignee);
+        break;
+      } else if (justBindings[index].assignee === param.parameter) {
+        replaceMap.set(param.parameter, justBindings[index].assignor);
+        break;
+      }
+    }
+  }
+  // First, we need to bind the literal variable to the action's effect parameters
+  // That way we can match a causal link with a threat just by comparing Literal objects
+  // As far as I know, we only need to bind the effects to their variable counterpart
+  let boundEffect = []
+  for (let effect of action.effect) {
+    let newEffect = {...effect, parameters: []}
+    for (let param of effect.parameters) {
+      newEffect.parameters.push(replaceMap.get(param))
+    }
+    boundEffect.push(newEffect);
+  }
+  let boundAction = {...action, effect: boundEffect}
+
+  /**
+   * Conditionally mutates/adds ordering constraints to current array of constraints,
+   * respecting the rule `O = O' U {A0 < Aadd < AInf}`.
+   *
+   * If the link being threatenened is connected to the first action, then the new ordering
+   * constraint is guaranteed to be occuring after the actions in the link. Otherwise,
+   * whether the new constraint occurs before or after the link is up to chance
+   * @param link
+   * @param action
+   * @param ordConstr
+   */
+  let condAddConstraints = (
+    link: CausalLink,
+    action: Action,
+    ordConstr: OrderingConstraint[]
+  ) => {
+    if (link.createdBy === "init") {
+      ordConstr.push(
+        createOrderingConstraint(link.consumedBy, action.name)
+      );
+    } else if (link.consumedBy === "goal") {
+      ordConstr.push(
+        createOrderingConstraint(action.name, link.createdBy)
+      )
+    } else {
+      if (coinFlip() === 0) {
+        ordConstr.push(
+          createOrderingConstraint(action.name, link.createdBy)
+        );
+      } else {
+        ordConstr.push(
+          createOrderingConstraint(link.consumedBy, action.name)
+        );
+      }
+    }
+  };
+  // Within each causal link, we need to check to see if it's 'Q' matches the opposite
+  // of any effects within the action we just added.
+  let allThreats = [];
+  let newOrderingConstraints = orderingConstraints.slice();
+  for (let link of causalLinks) {
+    // Because it's a single action, I don't know if it's possible to return more than
+    // one result to potentialThreats
+    let opEffect = getOppositeLiteral(link.preposition);
+    let potentiaThreats = boundAction.effect.filter((x) =>
+      isLiteralEqual(x, opEffect)
+    );
+    if (potentiaThreats.length !== 0) {
+      // If there exists a threat from the action, we need to check the action to see if it's new
+      if (
+        orderingConstraints.filter((x) => x.name === action.name).length === 0
+      ) {
+        // If the `init` step is the creator of the causalLink, then we know that the
+        // threat needs to be ordered after it, because nothing can be ordered prior
+        // to that step
+        condAddConstraints(link, action, newOrderingConstraints);
+      } else {
+        // If the action isn't new, we should check to see if
+        // the action has already been ordered. If it has, we can
+        // break out of the current loop, and go to the next potential threat
+        let isAlreadyOrdered = newOrderingConstraints.filter((x) => {
+          (x.name === action.name && x.tail === link.createdBy) ||
+            (x.name === link.consumedBy && x.tail === action.name);
+        });
+        if (isAlreadyOrdered.length > 0) {
+          break;
+        } else {
+          condAddConstraints(link, action, newOrderingConstraints);
+        }
+      }
+    } 
+  }
+  return newOrderingConstraints;
+  // TODO: This should return failure if the threat still exists., ie the threat
+  // is not ordered after the `consumedBy` or prior to the `createdBy` link
+};
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
  * @param plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
@@ -532,102 +662,11 @@ function POP(plan, agenda, domain) {
     };
   };
 
-  let updateCausalLinks = (causalLinks, action, Q) => {
-    // I'm implying/setting the goal action name as "last"
-    // I'm not sure if all causal links made by new actions
-    // are always set to create a link like this, but I believe so
-    let newCausalLink = createCausalLink(action, "last", Q);
+  let updateCausalLinks = (causalLinks, action, Q, aNeed) => {
+    let newCausalLink = createCausalLink(action, aNeed, Q);
     return causalLinks.concat(newCausalLink);
   };
 
-  let createOrderingConstraint = (name, tail) => {
-    return {
-      name: name,
-      tail: tail,
-    };
-  };
-
-  let getOppositeLiteral = (lit: Literal) => {
-    let opposite = lit.operation === "not" ? "" : "not";
-    return { ...lit, operation: opposite };
-  };
-
-  let checkForThreats = (
-    action: Action,
-    orderingConstraints,
-    causalLinks: CausalLink[],
-    variableBindings: VariableBinding[]
-  ) => {
-
-    // First, we need to bind the literal variable to the action's effect parameters
-    // That way we can match a causal link with a threat just by comparing Literal objects
-    let replaceMap = new Map();
-    for (let param of action.parameters) {
-      for (let binding of variableBindings) {
-        if (binding.assignor === param.parameter) {
-          replaceMap.set(param.parameter, binding.assignor)
-          break
-        } else if (binding.assignee === param.parameter) {
-          replaceMap.set(param.parameter, binding.assignee)
-          break
-        } 
-      }
-    }
-    // As far as I know, we only need to bind the effects to their variable counterpart
-    let boundEffect = [];
-    for (let effect of action.effect) {
-      for (let param of effect.parameters) {
-        boundEffect.push(replaceMap.get(param))
-      }
-    }
-    let boundAction = {
-      ...action,
-      effect: boundEffect
-    };
-
-    // Within each causal link, we need to check to see if it's 'Q' matches the opposite
-    // of any effects within the action we just added.
-    let newOrderingConstraints = orderingConstraints.slice();
-    for (let link of causalLinks) {
-      // Because it's a single action, I don't know if it's possible to return more than
-      // one result to potentialThreats
-      
-      let opEffect = getOppositeLiteral(link.preposition);
-      let potentiaThreats = boundAction.effect.filter(
-        (x) => isLiteralEqual(x, opEffect)
-      )
-      if (potentiaThreats.length !== 0) {
-        // If there exists a threat from the action, we need to check the action to see if it's new
-        if (
-          orderingConstraints.filter((x) => x.name === action.name).length === 0
-        ) {
-          // If the action is new, we need to make sure that the ordering constraints we add respect the
-          // rule O = O' U {A0 < Aadd < AInf}. Therefore the ordering constraint needs to be b/w the
-          // action and the consumer of causalLink
-          if (link.createdBy.name === "first") {
-            newOrderingConstraints.push(
-              createOrderingConstraint(action.name, link.consumedBy.name)
-            );
-          }
-        } else {
-          // If it's not new, we can can make either creator, or consumer the tail
-          // In this case, I'll leave it to random "chance" by a coinFlip helper fn
-          if (coinFlip() === 0) {
-            newOrderingConstraints.push(
-              createOrderingConstraint(action.name, link.createdBy.name)
-            );
-          } else {
-            newOrderingConstraints.push(
-              createOrderingConstraint(action.name, link.consumedBy.name)
-            );
-          }
-        }
-      }
-    }
-    // TODO: This should return failure if the threat still exists., ie the threat
-    // is not ordered after the `consumedBy` or prior to the `createdBy` link
-    return newOrderingConstraints;
-  };
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
   // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
@@ -662,7 +701,7 @@ function POP(plan, agenda, domain) {
     let actionsPrime = actions.concat(action);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
-    let linksPrime = updateCausalLinks(links, action, q);
+    let linksPrime = updateCausalLinks(links, action, q, aNeed);
     let orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
 
     // We mutate the original variableBindings, unlike all the other parts of the plan
@@ -695,3 +734,9 @@ function POP(plan, agenda, domain) {
     );
   }
 }
+
+// TODO: The null plan of any given problem should be the following. I should
+// represent that somewhere to initially call POP()
+//    · two actions (a0 and aInf)
+//    · one ordering constraint (a0 to aInf)
+//    · zero causal links and variable bindings/binding constraints

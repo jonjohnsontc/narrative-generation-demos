@@ -79,9 +79,11 @@ word      = word:([a-zA-Z0-9\-]+) { return word; }
 symbol    = (!delimiter .)+
 space     = [\n\r\t ] / comment
 paren     = "(" / ")"
-logicOp   = "and" / "not"
+logicOp   = "not"
 delimiter = paren / space
-comment   = ";" [a-zA-Z0-9\_\-\;\?\.\:\!\@\#\$\%\^\&\*\~\(\)\[\]\{\}\'\"\<\>\,\/\\ ]* [\n\r]
+
+/* moved "and" here from logicOp remove it from literal */
+comment   = ";" [a-zA-Z0-9\_\-\;\?\.\:\!\@\#\$\%\^\&\*\~\(\)\[\]\{\}\'\"\<\>\,\/\\ ]* [\n\r] / "and"
 
 parameters = space* ":parameters" delimiter+ params:parameter+ delimiter space*
 { return params; }
