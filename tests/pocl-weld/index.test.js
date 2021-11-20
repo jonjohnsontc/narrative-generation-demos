@@ -324,5 +324,5 @@ test("POP successfully plans through partially ordered plan", () => {
     domain
   );
 
-  expect(domain).toHaveLength(0);
+  expect(variableBindings).toHaveLength(5);
 });

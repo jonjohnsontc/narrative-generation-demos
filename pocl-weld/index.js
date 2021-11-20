@@ -53,7 +53,7 @@ var updateAction = function updateActionVariables(action) {
         var _a;
         if (param.includes("-")) {
             var par = (_a = param.split("-"), _a[0]), num = _a[1];
-            return par + "-" + (num + 1);
+            return par + "-" + (parseInt(num) + 1);
         }
         else {
             return param + "-1";
@@ -554,7 +554,7 @@ var POP = function PartialOrderPlan(plan, agenda, domain) {
     //   make when reading in a problem and domain/constructing the space
     var _a, _b;
     // 1. If agenda is empty, and all preconditions and effects are covered, return <A, O, L>
-    if (agenda.length === 0) {
+    if (agenda.length === 200) {
         return plan;
     }
     else {
@@ -571,26 +571,26 @@ var POP = function PartialOrderPlan(plan, agenda, domain) {
         // TODO: This whole group should be a conditional;
         // if the action is from the domain/has variables to replace
         var actionPrime = (0, exports.updateAction)(action);
-        var domainPrime = (0, exports.replaceAction)(domain, actionPrime);
-        var actionsPrime = actions.concat(action);
+        domain = (0, exports.replaceAction)(domain, actionPrime);
+        actions = actions.concat(action);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
-        var linksPrime = (0, exports.updateCausalLinks)(links, action, q, aNeed);
-        var orderConstrPrime = (0, exports.updateOrderingConstraints)(action, aNeed, actions, order);
+        links = (0, exports.updateCausalLinks)(links, action, q, aNeed);
+        order = (0, exports.updateOrderingConstraints)(action, aNeed, actions, order);
         // We mutate the original variableBindings, unlike all the other parts of the plan
         (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         // 4. Update the goal set
-        var agendaPrime = agenda.slice(1);
+        agenda = agenda.slice(1);
         // This can potentially mutate both agendaPrime and variableBindings
-        (0, exports.updateAgendaAndContraints)(action, actions, agendaPrime, variableBindings);
+        (0, exports.updateAgendaAndContraints)(action, actions, agenda, variableBindings);
         // 5. causal link protection
-        orderConstrPrime = (0, exports.checkForThreats)(action, orderConstrPrime, linksPrime, variableBindings);
+        order = (0, exports.checkForThreats)(action, order, links, variableBindings);
         // 6. recursive invocation
         (0, exports.POP)({
-            actions: actionsPrime,
-            order: orderConstrPrime,
-            links: linksPrime,
+            actions: actions,
+            order: order,
+            links: links,
             variableBindings: variableBindings
-        }, agendaPrime, domainPrime);
+        }, agenda, domain);
     }
 };
 exports.POP = POP;

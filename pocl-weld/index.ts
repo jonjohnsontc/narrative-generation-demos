@@ -93,7 +93,7 @@ export let updateAction = function updateActionVariables(
   let updateParam = (param: string) => {
     if (param.includes("-")) {
       let [par, num] = param.split("-");
-      return `${par}-${num + 1}`;
+      return `${par}-${parseInt(num) + 1}`;
     } else {
       return `${param}-1`;
     }
@@ -637,7 +637,7 @@ export let POP = function PartialOrderPlan(plan, agenda, domain) {
   //   make when reading in a problem and domain/constructing the space
 
   // 1. If agenda is empty, and all preconditions and effects are covered, return <A, O, L>
-  if (agenda.length === 0) {
+  if (agenda.length === 200) {
     return plan;
   } else {
     // destructuring plan
@@ -661,40 +661,40 @@ export let POP = function PartialOrderPlan(plan, agenda, domain) {
     // TODO: This whole group should be a conditional;
     // if the action is from the domain/has variables to replace
     let actionPrime = updateAction(action);
-    let domainPrime = replaceAction(domain, actionPrime);
-    let actionsPrime = actions.concat(action);
+    domain = replaceAction(domain, actionPrime);
+    actions = actions.concat(action);
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
-    let linksPrime = updateCausalLinks(links, action, q, aNeed);
-    let orderConstrPrime = updateOrderingConstraints(action, aNeed, actions, order);
+    links = updateCausalLinks(links, action, q, aNeed);
+    order = updateOrderingConstraints(action, aNeed, actions, order);
 
     // We mutate the original variableBindings, unlike all the other parts of the plan
     updateBindingConstraints(variableBindings, newBindingConstraints);
 
     // 4. Update the goal set
-    let agendaPrime = agenda.slice(1);
+    agenda = agenda.slice(1);
 
     // This can potentially mutate both agendaPrime and variableBindings
-    updateAgendaAndContraints(action, actions, agendaPrime, variableBindings);
+    updateAgendaAndContraints(action, actions, agenda, variableBindings);
 
     // 5. causal link protection
-    orderConstrPrime = checkForThreats(
+    order = checkForThreats(
       action,
-      orderConstrPrime,
-      linksPrime,
+      order,
+      links,
       variableBindings
     );
 
     // 6. recursive invocation
     POP(
       {
-        actions: actionsPrime,
-        order: orderConstrPrime,
-        links: linksPrime,
+        actions: actions,
+        order: order,
+        links: links,
         variableBindings: variableBindings,
       },
-      agendaPrime,
-      domainPrime
+      agenda,
+      domain
     );
   }
 }
