@@ -11,7 +11,7 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.isLiteralEqual = exports.zip = void 0;
+exports.POP = exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.isLiteralEqual = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -361,32 +361,31 @@ exports.chooseAction = chooseAction;
 // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
 // if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
 // and before the goal step (aInf)
-var updateOrderingConstraints = function (aAdd, aNeed, AOLArray) {
-    var actions = AOLArray.actions.slice();
+var updateOrderingConstraints = function (aAdd, aNeed, actions, orderingConstraints) {
     var orderingConstraintPrime;
-    if (actions.find(function (x) { return (x.name === aAdd.name) == null; })) {
+    if (actions.filter(function (x) { return (x.name === aAdd.name); }).length === 0) {
         // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
         // but given that assumption we create another constraint with name as first step
         // and tail as the new action
-        var newConstraint = [
-            {
-                name: aAdd.name,
-                tail: "goal"
-            },
+        var newConstraints = [
             {
                 name: "init",
                 tail: aAdd.name
             },
+            {
+                name: aAdd.name,
+                tail: "goal"
+            },
         ];
-        orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+        orderingConstraintPrime = orderingConstraints.concat(newConstraints);
     }
     else {
         // if the action isn't new to the plan (AOLArray)
         var newConstraint = {
             name: aAdd.name,
-            tail: aNeed.name
+            tail: aNeed
         };
-        orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+        orderingConstraintPrime = orderingConstraints.concat(newConstraint);
     }
     // I'm arbitrarily sorting by name here, so all the ordering constraints
     // will be grouped as such. I don't think this is important if my assumption
@@ -548,34 +547,35 @@ exports.updateCausalLinks = updateCausalLinks;
  * @param agenda
  * @returns  A complete ordered plan
  */
-function POP(plan, agenda, domain) {
+var POP = function PartialOrderPlan(plan, agenda, domain) {
     // We need to ensure that initial state contains no variable bindings, and all variables mentioned
     // in the effects of an operator be included in the preconditions of an operator.
     // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
     //   make when reading in a problem and domain/constructing the space
+    var _a, _b;
     // 1. If agenda is empty, and all preconditions and effects are covered, return <A, O, L>
     if (agenda.length === 0) {
         return plan;
     }
     else {
         // destructuring plan
-        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings, domain_1 = plan.domain;
+        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings;
         // 2. Goal selection
         // we choose an item in the agenda. right now we're selecting the first item
         // but it doesn't need to be. It's destructured into Q which is a constant, and
         // `aNeed` which is the action that's precondition is Q
-        var _a = agenda[0], q = _a.q, aNeed = _a.aNeed;
+        var q = (_a = agenda[0], _a.q), aNeed = _a.aNeed;
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
-        var _b = (0, exports.chooseAction)(q, actions, domain_1, variableBindings), action = _b.action, newBindingConstraints = _b.newBindingConstraints;
+        var action = (_b = (0, exports.chooseAction)(q, actions, domain, variableBindings), _b.action), newBindingConstraints = _b.newBindingConstraints;
         // TODO: This whole group should be a conditional;
         // if the action is from the domain/has variables to replace
         var actionPrime = (0, exports.updateAction)(action);
-        var domainPrime = (0, exports.replaceAction)(domain_1, actionPrime);
+        var domainPrime = (0, exports.replaceAction)(domain, actionPrime);
         var actionsPrime = actions.concat(action);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
         var linksPrime = (0, exports.updateCausalLinks)(links, action, q, aNeed);
-        var orderConstrPrime = (0, exports.updateOrderingConstraints)(action, aNeed, plan);
+        var orderConstrPrime = (0, exports.updateOrderingConstraints)(action, aNeed, actions, order);
         // We mutate the original variableBindings, unlike all the other parts of the plan
         (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         // 4. Update the goal set
@@ -585,15 +585,15 @@ function POP(plan, agenda, domain) {
         // 5. causal link protection
         orderConstrPrime = (0, exports.checkForThreats)(action, orderConstrPrime, linksPrime, variableBindings);
         // 6. recursive invocation
-        POP({
+        (0, exports.POP)({
             actions: actionsPrime,
             order: orderConstrPrime,
             links: linksPrime,
-            variableBindings: variableBindings,
-            domain: domainPrime
-        }, agendaPrime);
+            variableBindings: variableBindings
+        }, agendaPrime, domainPrime);
     }
-}
+};
+exports.POP = POP;
 // TODO: The null plan of any given problem should be the following. I should
 // represent that somewhere to initially call POP()
 //    · two actions (a0 and aInf)

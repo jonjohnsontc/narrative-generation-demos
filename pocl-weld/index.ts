@@ -41,6 +41,8 @@ type AgendaItem = {
   name: string;
 };
 
+type Agenda = AgendaItem[];
+
 type CausalLink = {
   createdBy: string; // action effect
   consumedBy: string; // action precondition
@@ -435,31 +437,35 @@ export let chooseAction = function findActionThatSatisfiesQ(
 // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
 // if aAdd is new, then let Oprime be all O's with aAdd after the start step (a0)
 // and before the goal step (aInf)
-export let updateOrderingConstraints = (aAdd: Action, aNeed, AOLArray) => {
-  let actions = AOLArray.actions.slice();
+export let updateOrderingConstraints = (
+  aAdd: Action,
+  aNeed: string,
+  actions: Action[],
+  orderingConstraints: OrderingConstraint[]
+) => {
   let orderingConstraintPrime;
-  if (actions.find((x) => (x.name === aAdd.name) == null)) {
+  if (actions.filter((x) => (x.name === aAdd.name)).length === 0) {
     // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
     // but given that assumption we create another constraint with name as first step
     // and tail as the new action
-    let newConstraint = [
-      {
-        name: aAdd.name,
-        tail: "goal",
-      },
+    let newConstraints = [
       {
         name: "init",
         tail: aAdd.name,
       },
+      {
+        name: aAdd.name,
+        tail: "goal",
+      },
     ];
-    orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+    orderingConstraintPrime = orderingConstraints.concat(newConstraints);
   } else {
     // if the action isn't new to the plan (AOLArray)
     let newConstraint = {
       name: aAdd.name,
-      tail: aNeed.name,
+      tail: aNeed,
     };
-    orderingConstraintPrime = AOLArray.order.concat(newConstraint);
+    orderingConstraintPrime = orderingConstraints.concat(newConstraint);
   }
   // I'm arbitrarily sorting by name here, so all the ordering constraints
   // will be grouped as such. I don't think this is important if my assumption
@@ -624,7 +630,7 @@ export let updateCausalLinks = (
  * @param agenda
  * @returns  A complete ordered plan
  */
-function POP(plan, agenda, domain) {
+export let POP = function PartialOrderPlan(plan, agenda, domain) {
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
   // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
@@ -635,7 +641,7 @@ function POP(plan, agenda, domain) {
     return plan;
   } else {
     // destructuring plan
-    let { actions, order, links, variableBindings, domain } = plan;
+    let { actions, order, links, variableBindings } = plan;
 
     // 2. Goal selection
     // we choose an item in the agenda. right now we're selecting the first item
@@ -660,7 +666,7 @@ function POP(plan, agenda, domain) {
 
     // Creating new inputs (iPrime) which will be called recursively in 6 below
     let linksPrime = updateCausalLinks(links, action, q, aNeed);
-    let orderConstrPrime = updateOrderingConstraints(action, aNeed, plan);
+    let orderConstrPrime = updateOrderingConstraints(action, aNeed, actions, order);
 
     // We mutate the original variableBindings, unlike all the other parts of the plan
     updateBindingConstraints(variableBindings, newBindingConstraints);
@@ -686,9 +692,9 @@ function POP(plan, agenda, domain) {
         order: orderConstrPrime,
         links: linksPrime,
         variableBindings: variableBindings,
-        domain: domainPrime,
       },
-      agendaPrime
+      agendaPrime,
+      domainPrime
     );
   }
 }

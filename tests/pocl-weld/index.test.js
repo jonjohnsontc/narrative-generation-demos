@@ -254,15 +254,75 @@ test("updateCausalLinks concats a new CausalLink into the CausalLink array", () 
   ];
   // We're just cloning the another action from above and givint it a new name
   // since updateCausalLinks doesn't touch any other part of the action
-  const addedAction = {...threateningAction, name: "move - a, b"};
-  const addedQ = {operation: "", action: "on", parameters: ["A", "B"]};
-  expect(pocl.updateCausalLinks(exampleCausalLinks, addedAction, addedQ, "goal")).toHaveLength(2);
+  const addedAction = { ...threateningAction, name: "move - a, b" };
+  const addedQ = { operation: "", action: "on", parameters: ["A", "B"] };
+  expect(
+    pocl.updateCausalLinks(exampleCausalLinks, addedAction, addedQ, "goal")
+  ).toHaveLength(2);
 });
-
-// TODO:
-// Wanna make tests for
-// - updateOrderingConstraints
 
 test("updateOrderingConstraints adds appropriate ordering constraints given action selected", () => {
   // I wanna test how it adds constraints given a new action, and given an action already taken
-})
+
+  // move - a,table already taken
+  const ordConstraints = [...initialOrdConstraints];
+
+  // updateOrderingConstraints only considers the name of an action
+  const oldAction = { name: "move - a,table" };
+  const newAction = { name: "move - b,c" };
+  const actions = [
+    { name: "move - a,table" },
+    { name: "move - g,b" },
+    { name: "init" },
+    { name: "goal" },
+  ];
+  // TODO: Not sure if either of these scenarios are close to reality
+  const newResult = pocl.updateOrderingConstraints(
+    newAction,
+    "goal",
+    actions,
+    ordConstraints
+  );
+  expect(newResult).toHaveLength(5);
+
+  const oldResult = pocl.updateOrderingConstraints(
+    oldAction,
+    "move - g,b",
+    actions,
+    ordConstraints
+  );
+  expect(oldResult).toHaveLength(4);
+});
+
+test("POP successfully plans through partially ordered plan", () => {
+  const domain = parsed.weldDomain.actions;
+  const causalLinks = [];
+  const orderingConstraints = [{ name: "init", tail: "goal" }];
+
+  const actions = parsed.weldProblem.states;
+  // init action needs to have "effect" property
+  actions[0].effect = actions[0].actions;
+  // goal action needs to have "precondition" property
+  actions[1].precondition = actions[1].actions;
+
+  const variableBindings = new Map();
+  const agenda = [];
+  for (let precond of actions[1].precondition) {
+    agenda.push({
+      q: precond,
+      name: "goal",
+    });
+  }
+  const result = pocl.POP(
+    {
+      actions: actions,
+      order: orderingConstraints,
+      links: causalLinks,
+      variableBindings: variableBindings,
+    },
+    agenda,
+    domain
+  );
+
+  expect(domain).toHaveLength(0);
+});
