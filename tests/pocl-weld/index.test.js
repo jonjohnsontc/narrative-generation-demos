@@ -28,16 +28,6 @@ test("zip properly zips together two arrays", () => {
 //////////////////////////////////////
 // Partial Order Planning (POP) func's
 //////////////////////////////////////
-const paramToBind = ["a", "b"];
-const actionToEdit = { operation: "", action: "on", parameters: ["p1", "p2"] };
-test("bindParams binds parameters to action", () => {
-  expect(pocl.bindParams(actionToEdit, paramToBind)).toEqual({
-    operation: "",
-    action: "on",
-    parameters: ["a", "b"],
-  });
-});
-
 const exampleAction = { ...parsed.blocksDomain.actions[0] };
 test("isNew returns true when action is new", () => {
   expect(pocl.isNew(exampleAction)).toBe(true);
@@ -167,15 +157,19 @@ test("updateAgendaAndContraints successfully updates agenda and constraints with
   expect(agenda).toHaveLength(9);
 });
 
-const testLit = {operation: "", action: "on", parameters: ["A", "B"]};
+const testLit = { operation: "", action: "on", parameters: ["A", "B"] };
 test("getOppositeLiteral correctly outputs opposite literal", () => {
-  expect(pocl.getOppositeLiteral(testLit)).toEqual({operation: "not", action: "on", parameters: ["A", "B"]})
-})
+  expect(pocl.getOppositeLiteral(testLit)).toEqual({
+    operation: "not",
+    action: "on",
+    parameters: ["A", "B"],
+  });
+});
 
-const testLit2 = {action: "on", operation: "", parameters: ["A", "B"]}
+const testLit2 = { action: "on", operation: "", parameters: ["A", "B"] };
 test("isLiteralEqual returns true when literals are equal", () => {
-  expect(pocl.isLiteralEqual(testLit, testLit2)).toBe(true)
-})
+  expect(pocl.isLiteralEqual(testLit, testLit2)).toBe(true);
+});
 
 const initialOrdConstraints = [
   { name: "init", tail: "goal" },
@@ -224,6 +218,51 @@ test("checkForThreats locates a potential threat given action passed, and create
     initialLinks,
     testBindings
   );
-  expect(result).toHaveLength(4)
-  expect(result.pop()).toEqual({"name": "move - b, c", "tail": "move - a,table"})
+  expect(result).toHaveLength(4);
+  expect(result.pop()).toEqual({ name: "move - b, c", tail: "move - a,table" });
 });
+
+test("updateBindingConstraints adds new constraints from 'chosen' action", () => {
+  const exampleConstraints = new Map(testBindings);
+  const newBindings = [
+    {
+      bindingConstraint: { equal: true, assignor: "b-2", assignee: "A" },
+      key: "b2=A",
+    },
+    {
+      bindingConstraint: { equal: true, assignor: "t2-2", assignee: "B" },
+      key: "t2-2=B",
+    },
+    {
+      bindingConstraint: { equal: true, assignor: "t1-2", assignee: "C" },
+      key: "t1-2=C",
+    },
+  ];
+  pocl.updateBindingConstraints(exampleConstraints, newBindings);
+
+  // Resulting map should have size 6
+  expect(exampleConstraints).toHaveProperty("size", 6);
+});
+
+test("updateCausalLinks concats a new CausalLink into the CausalLink array", () => {
+  const exampleCausalLinks = [
+    {
+      createdBy: "move - b, c",
+      consumedBy: "goal",
+      preposition: { operation: "", action: "on", parameters: ["B", "C"] },
+    },
+  ];
+  // We're just cloning the another action from above and givint it a new name
+  // since updateCausalLinks doesn't touch any other part of the action
+  const addedAction = {...threateningAction, name: "move - a, b"};
+  const addedQ = {operation: "", action: "on", parameters: ["A", "B"]};
+  expect(pocl.updateCausalLinks(exampleCausalLinks, addedAction, addedQ, "goal")).toHaveLength(2);
+});
+
+// TODO:
+// Wanna make tests for
+// - updateOrderingConstraints
+
+test("updateOrderingConstraints adds appropriate ordering constraints given action selected", () => {
+  // I wanna test how it adds constraints given a new action, and given an action already taken
+})

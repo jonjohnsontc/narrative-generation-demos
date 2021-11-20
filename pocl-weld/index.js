@@ -11,7 +11,7 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.checkForThreats = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.bindParams = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.isLiteralEqual = exports.zip = void 0;
+exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndContraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.isLiteralEqual = exports.zip = void 0;
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -249,6 +249,7 @@ var checkBindings = function checkBindingsForConflict(binding, argumentPairs, ar
     }
 };
 exports.checkBindings = checkBindings;
+// TODO: Add doctsring
 var updateBindingConstraints = function condUpdateBindingConstraints(currentBindings, newBindings) {
     for (var _i = 0, newBindings_1 = newBindings; _i < newBindings_1.length; _i++) {
         var binding = newBindings_1[_i];
@@ -301,48 +302,10 @@ var MGU = function findMostGenerialUnifier(Q, R, B) {
     return qMaps;
 };
 exports.MGU = MGU;
-// TODO: This needs to bind params in the correct order
-/**
- * Binds parameters to an action. If the action contains more parameters than specified,
- * a nondeterministic choose is called which retrieves any additional arguments
- * @param {any} action
- * @param {any} args
- * @returns {any}
- */
-var bindParams = function bindParameters(action, args) {
-    var actionWithParams = __assign({}, action);
-    // If the number of parameters is the same as the number of args
-    // we can bind them without needing to generate additional args
-    if (actionWithParams.parameters.length === args.length) {
-        actionWithParams.parameters = args;
-    }
-    return actionWithParams;
-};
-exports.bindParams = bindParams;
 var isNew = function isActionNew(action) {
     return action.parameters[0].parameter.charCodeAt(0) > 96;
 };
 exports.isNew = isNew;
-// I had build this to try and make a recursive way of checking the newness of all params
-// but I keep either running into recursion errors or returning undefined
-// TODO: Port to cljs and see if works?
-var verifyPreconditions = function checkAllPreconditions(parameters, isActionNew) {
-    if (parameters.length === 0) {
-        return isActionNew;
-    }
-    else {
-        // Is the parameter an upper or lowercase? We check by looking at the charcode of the parameter
-        var isThisParamNew = parameters[0].parameter.charCodeAt(0) > 96;
-        // If 'isNewAction' is consistent with the current param, or undefined, we recur
-        // otherwise we throw an error that the action is bad
-        if (isThisParamNew === isActionNew || typeof isActionNew === "undefined") {
-            checkAllPreconditions(parameters.slice(1), isThisParamNew);
-        }
-        else {
-            return "butt";
-        }
-    }
-};
 /**
  * Given Q, selects an action from the set of AOLArray and actions.
  * @param Q
@@ -514,7 +477,6 @@ var checkForThreats = function checkForThreatsGivenConstraints(action, orderingC
     };
     // Within each causal link, we need to check to see if it's 'Q' matches the opposite
     // of any effects within the action we just added.
-    var allThreats = [];
     var newOrderingConstraints = orderingConstraints.slice();
     var _loop_1 = function (link) {
         // Because it's a single action, I don't know if it's possible to return more than
@@ -560,31 +522,33 @@ var checkForThreats = function checkForThreatsGivenConstraints(action, orderingC
 };
 exports.checkForThreats = checkForThreats;
 /**
+ * Create a causal link
+ * @param creator The Action that spawned
+ * @param consumer
+ * @returns
+ */
+var createCausalLink = function (creator, consumer, prep) {
+    return {
+        createdBy: creator,
+        consumedBy: consumer,
+        // The preposition (or Q) needs to be a string representation of the effect/precondition
+        // shared by the creator and consumer.
+        preposition: prep
+    };
+};
+exports.createCausalLink = createCausalLink;
+var updateCausalLinks = function (causalLinks, action, Q, aNeed) {
+    var newCausalLink = (0, exports.createCausalLink)(action.name, aNeed, Q);
+    return causalLinks.concat(newCausalLink);
+};
+exports.updateCausalLinks = updateCausalLinks;
+/**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
  * @param plan An object consisting of a number of vectors for each portion of a partially ordered plan. Includes actions, orderingConstraints, causalLinks, and variableBindings
  * @param agenda
  * @returns  A complete ordered plan
  */
 function POP(plan, agenda, domain) {
-    /**
-     * Create a causal link
-     * @param {any} creator The Action that spawned
-     * @param {any} consumer
-     * @returns {any}
-     */
-    var createCausalLink = function (creator, consumer, prep) {
-        return {
-            createdBy: creator,
-            consumedBy: consumer,
-            // The preposition (or Q) needs to be a string representation of the effect/precondition
-            // shared by the creator and consumer.
-            preposition: prep
-        };
-    };
-    var updateCausalLinks = function (causalLinks, action, Q, aNeed) {
-        var newCausalLink = createCausalLink(action, aNeed, Q);
-        return causalLinks.concat(newCausalLink);
-    };
     // We need to ensure that initial state contains no variable bindings, and all variables mentioned
     // in the effects of an operator be included in the preconditions of an operator.
     // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
@@ -610,7 +574,7 @@ function POP(plan, agenda, domain) {
         var domainPrime = (0, exports.replaceAction)(domain_1, actionPrime);
         var actionsPrime = actions.concat(action);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
-        var linksPrime = updateCausalLinks(links, action, q, aNeed);
+        var linksPrime = (0, exports.updateCausalLinks)(links, action, q, aNeed);
         var orderConstrPrime = (0, exports.updateOrderingConstraints)(action, aNeed, plan);
         // We mutate the original variableBindings, unlike all the other parts of the plan
         (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);

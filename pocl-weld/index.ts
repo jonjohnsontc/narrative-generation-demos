@@ -316,7 +316,7 @@ export let checkBindings = function checkBindingsForConflict(
     }
   }
 };
-
+// TODO: Add doctsring
 export let updateBindingConstraints = function condUpdateBindingConstraints(
   currentBindings: BindingMap,
   newBindings: Array<{ bindingConstraint: VariableBinding; key: string }>
@@ -374,49 +374,8 @@ export let MGU = function findMostGenerialUnifier(Q, R, B) {
   return qMaps;
 };
 
-// TODO: This needs to bind params in the correct order
-/**
- * Binds parameters to an action. If the action contains more parameters than specified,
- * a nondeterministic choose is called which retrieves any additional arguments
- * @param {any} action
- * @param {any} args
- * @returns {any}
- */
-export let bindParams = function bindParameters(action, args) {
-  let actionWithParams = { ...action };
-  // If the number of parameters is the same as the number of args
-  // we can bind them without needing to generate additional args
-  if (actionWithParams.parameters.length === args.length) {
-    actionWithParams.parameters = args;
-  }
-  return actionWithParams;
-};
-
 export let isNew = function isActionNew(action) {
   return action.parameters[0].parameter.charCodeAt(0) > 96;
-};
-
-// I had build this to try and make a recursive way of checking the newness of all params
-// but I keep either running into recursion errors or returning undefined
-// TODO: Port to cljs and see if works?
-let verifyPreconditions = function checkAllPreconditions(
-  parameters,
-  isActionNew
-) {
-  if (parameters.length === 0) {
-    return isActionNew;
-  } else {
-    // Is the parameter an upper or lowercase? We check by looking at the charcode of the parameter
-    let isThisParamNew = parameters[0].parameter.charCodeAt(0) > 96;
-
-    // If 'isNewAction' is consistent with the current param, or undefined, we recur
-    // otherwise we throw an error that the action is bad
-    if (isThisParamNew === isActionNew || typeof isActionNew === "undefined") {
-      checkAllPreconditions(parameters.slice(1), isThisParamNew);
-    } else {
-      return "butt";
-    }
-  }
 };
 
 /**
@@ -553,15 +512,15 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
   // First, we need to bind the literal variable to the action's effect parameters
   // That way we can match a causal link with a threat just by comparing Literal objects
   // As far as I know, we only need to bind the effects to their variable counterpart
-  let boundEffect = []
+  let boundEffect = [];
   for (let effect of action.effect) {
-    let newEffect = {...effect, parameters: []}
+    let newEffect = { ...effect, parameters: [] };
     for (let param of effect.parameters) {
-      newEffect.parameters.push(replaceMap.get(param))
+      newEffect.parameters.push(replaceMap.get(param));
     }
     boundEffect.push(newEffect);
   }
-  let boundAction = {...action, effect: boundEffect}
+  let boundAction = { ...action, effect: boundEffect };
 
   /**
    * Conditionally mutates/adds ordering constraints to current array of constraints,
@@ -580,28 +539,19 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
     ordConstr: OrderingConstraint[]
   ) => {
     if (link.createdBy === "init") {
-      ordConstr.push(
-        createOrderingConstraint(link.consumedBy, action.name)
-      );
+      ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
     } else if (link.consumedBy === "goal") {
-      ordConstr.push(
-        createOrderingConstraint(action.name, link.createdBy)
-      )
+      ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
     } else {
       if (coinFlip() === 0) {
-        ordConstr.push(
-          createOrderingConstraint(action.name, link.createdBy)
-        );
+        ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
       } else {
-        ordConstr.push(
-          createOrderingConstraint(link.consumedBy, action.name)
-        );
+        ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
       }
     }
   };
   // Within each causal link, we need to check to see if it's 'Q' matches the opposite
   // of any effects within the action we just added.
-  let allThreats = [];
   let newOrderingConstraints = orderingConstraints.slice();
   for (let link of causalLinks) {
     // Because it's a single action, I don't know if it's possible to return more than
@@ -633,11 +583,40 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
           condAddConstraints(link, action, newOrderingConstraints);
         }
       }
-    } 
+    }
   }
   return newOrderingConstraints;
   // TODO: This should return failure if the threat still exists., ie the threat
   // is not ordered after the `consumedBy` or prior to the `createdBy` link
+};
+/**
+ * Create a causal link
+ * @param creator The Action that spawned
+ * @param consumer
+ * @returns
+ */
+export let createCausalLink = (
+  creator: string,
+  consumer: string,
+  prep: Literal
+): CausalLink => {
+  return {
+    createdBy: creator,
+    consumedBy: consumer,
+    // The preposition (or Q) needs to be a string representation of the effect/precondition
+    // shared by the creator and consumer.
+    preposition: prep,
+  };
+};
+
+export let updateCausalLinks = (
+  causalLinks: CausalLink[],
+  action: Action,
+  Q: Literal,
+  aNeed: string
+) => {
+  let newCausalLink = createCausalLink(action.name, aNeed, Q);
+  return causalLinks.concat(newCausalLink);
 };
 /**
  * The main function. This is built based off of me reading through `An Introduction to Least Commitment Planning`by Daniel Weld.
@@ -646,27 +625,6 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
  * @returns  A complete ordered plan
  */
 function POP(plan, agenda, domain) {
-  /**
-   * Create a causal link
-   * @param {any} creator The Action that spawned
-   * @param {any} consumer
-   * @returns {any}
-   */
-  let createCausalLink = (creator, consumer, prep) => {
-    return {
-      createdBy: creator,
-      consumedBy: consumer,
-      // The preposition (or Q) needs to be a string representation of the effect/precondition
-      // shared by the creator and consumer.
-      preposition: prep,
-    };
-  };
-
-  let updateCausalLinks = (causalLinks, action, Q, aNeed) => {
-    let newCausalLink = createCausalLink(action, aNeed, Q);
-    return causalLinks.concat(newCausalLink);
-  };
-
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
   // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
