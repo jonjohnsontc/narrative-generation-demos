@@ -1,7 +1,9 @@
 const pocl = require("../../pocl-weld/index");
-const parsed = require("../../shared-libs/parser/parser");
+const parsed = require("../../shared-libs/parser/parser.cjs");
 // Opening state actions
 const actions = parsed.blocksProblem.states[0].actions;
+const weldDomain = parsed.weldDomain;
+const weldProblem = parsed.weldProblem;
 
 //////////////////////////////////////
 // Helper func's
@@ -144,8 +146,8 @@ const newAction = {
 };
 const testActions = [...actionArray];
 const bindConstraints = new Map();
-test("updateAgendaAndContraints successfully updates agenda and constraints with properties of new action passed through", () => {
-  pocl.updateAgendaAndContraints(
+test("updateAgendaAndConstraints successfully updates agenda and constraints with properties of new action passed through", () => {
+  pocl.updateAgendaAndConstraints(
     newAction,
     testActions,
     agenda,
@@ -294,35 +296,51 @@ test("updateOrderingConstraints adds appropriate ordering constraints given acti
   expect(oldResult).toHaveLength(4);
 });
 
-test("POP successfully plans through partially ordered plan", () => {
-  const domain = parsed.weldDomain.actions;
-  const causalLinks = [];
-  const orderingConstraints = [{ name: "init", tail: "goal" }];
+test("genReplaceMap returns a map with the parameter-domainParameter k,v pairs in the order specified", () => {
+  const action = weldDomain.actions[0];
+  const variableBindings = new Map([
+  ["b=A", { equal: true, assignor: "b", assignee: "A" }],
+  ["y=C", { equal: true, assignor: "y", assignee: "C" }],
+  ["b≠x", { equal: false, assignor: "b", assignee: "x" }]
+  ]);
+  
+  const domainParameterResult = pocl.genReplaceMap(action, variableBindings, true);
+  const actionParameterResult = pocl.genReplaceMap(action, variableBindings, false);
 
-  const actions = parsed.weldProblem.states;
-  // init action needs to have "effect" property
-  actions[0].effect = actions[0].actions;
-  // goal action needs to have "precondition" property
-  actions[1].precondition = actions[1].actions;
+  // TODO: change expected results
+  expect(domainParameterResult).toEqual(new Map([["A", "b"], ["B", "x"],["C", "y"]]))
+  expect(actionParameterResult).toEqual(new Map([["b", "A"], ["x", "B"],["y", "C"]]));
+})
 
-  const variableBindings = new Map();
-  const agenda = [];
-  for (let precond of actions[1].precondition) {
-    agenda.push({
-      q: precond,
-      name: "goal",
-    });
-  }
-  const result = pocl.POP(
-    {
-      actions: actions,
-      order: orderingConstraints,
-      links: causalLinks,
-      variableBindings: variableBindings,
-    },
-    agenda,
-    domain
-  );
+// test("POP successfully plans through partially ordered plan", () => {
+//   const domain = parsed.weldDomain.actions;
+//   const causalLinks = [];
+//   const orderingConstraints = [{ name: "init", tail: "goal" }];
 
-  expect(variableBindings).toHaveLength(5);
-});
+//   const actions = parsed.weldProblem.states;
+//   // init action needs to have "effect" property
+//   actions[0].effect = actions[0].actions;
+//   // goal action needs to have "precondition" property
+//   actions[1].precondition = actions[1].actions;
+
+//   const variableBindings = new Map();
+//   const agenda = [];
+//   for (let precond of actions[1].precondition) {
+//     agenda.push({
+//       q: precond,
+//       name: "goal",
+//     });
+//   }
+//   const result = pocl.POP(
+//     {
+//       actions: actions,
+//       order: orderingConstraints,
+//       links: causalLinks,
+//       variableBindings: variableBindings,
+//     },
+//     agenda,
+//     domain
+//   );
+
+//   expect(result).toHaveLength();
+// });

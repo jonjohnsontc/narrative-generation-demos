@@ -1,5 +1,8 @@
 (define (problem weld-sussman-anomaly)
   (:domain blocksworld)
+  (:objects
+    A - block B - block C - block 
+    Table - table)
   (:init (and (on C A) (clear B) (clear C)
             (on A Table) (on B Table)))
   (:goal (and (on A B) (on B C))))
