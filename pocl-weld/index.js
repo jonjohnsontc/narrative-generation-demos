@@ -651,11 +651,11 @@ exports.POP = POP;
 //    · two actions (a0 and aInf)
 //    · one ordering constraint (a0 to aInf)
 //    · zero causal links and variable bindings/binding constraints
-var domain = parser_cjs_1["default"].weldDomain.actions;
+var domain = parser_cjs_1.weldDomain.actions;
 var causalLinks = [];
 var orderingConstraints = [{ name: "init", tail: "goal" }];
 var variableBindings = new Map();
-var actions = parser_cjs_1["default"].weldProblem.states;
+var actions = parser_cjs_1.weldProblem.states;
 // init action needs to have "effect" property
 actions[0].effect = actions[0].actions;
 // goal action needs to have "precondition" property

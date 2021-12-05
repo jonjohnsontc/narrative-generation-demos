@@ -372,7 +372,7 @@ export let MGU = function findMostGenerialUnifier(Q, R, B) {
     //   restrictions we should place on selecting the param
   } else {
     // For the most general unifier, let's just assume Q's parameters
-    let QArgs = Q.parameters;
+    let QArgs = Q.parameters; 
   }
   
 
