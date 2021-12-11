@@ -297,21 +297,44 @@ test("updateOrderingConstraints adds appropriate ordering constraints given acti
   expect(oldResult).toHaveLength(4);
 });
 
-// test("genReplaceMap returns a map with the parameter-domainParameter k,v pairs in the order specified", () => {
-//   const action = weldDomain.actions[0];
-//   const variableBindings = new Map([
-//   ["b=A", { equal: true, assignor: "b", assignee: "A" }],
-//   ["y=C", { equal: true, assignor: "y", assignee: "C" }],
-//   ["b≠x", { equal: false, assignor: "b", assignee: "x" }]
-//   ]);
+test("genReplaceMap returns a map with the parameter-domainParameter k,v pairs in the order specified", () => {
+  const action = weldDomain.actions[0];
+  const variableBindings = new Map([
+    [
+      "b",
+      [
+        { equal: true, assignor: "b", assignee: "A" },
+        { equal: false, assignor: "b", assignee: "x" },
+      ],
+    ],
+    ["y", [{ equal: true, assignor: "y", assignee: "C" }]],
+  ]);
 
-//   const domainParameterResult = pocl.genReplaceMap(action, variableBindings, true);
-//   const actionParameterResult = pocl.genReplaceMap(action, variableBindings, false);
+  const domainParameterResult = pocl.genReplaceMap(
+    action,
+    variableBindings,
+    true
+  );
+  const actionParameterResult = pocl.genReplaceMap(
+    action,
+    variableBindings,
+    false
+  );
 
-//   // TODO: change expected results
-//   expect(domainParameterResult).toEqual(new Map([["A", "b"], ["B", "x"],["C", "y"]]))
-//   expect(actionParameterResult).toEqual(new Map([["b", "A"], ["x", "B"],["y", "C"]]));
-// })
+  // TODO: change expected results
+  expect(domainParameterResult).toEqual(
+    new Map([
+      ["A", "b"],
+      ["C", "y"],
+    ])
+  );
+  expect(actionParameterResult).toEqual(
+    new Map([
+      ["b", "A"],
+      ["y", "C"],
+    ])
+  );
+});
 
 // test("POP successfully plans through partially ordered plan", () => {
 //   const domain = parsed.weldDomain.actions;
