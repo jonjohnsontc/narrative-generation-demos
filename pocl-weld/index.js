@@ -12,8 +12,6 @@ var __assign = (this && this.__assign) || function () {
 };
 exports.__esModule = true;
 exports.POP = exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.genReplaceMap = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndConstraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.isLiteralEqual = exports.zip = void 0;
-// TODO: Seeing if this will work for bringing in the parser module
-var parser_cjs_1 = require("/Users/jonjohnson/dev/narrative-generation/shared-libs/parser/parser.cjs");
 // I have this in cpopl/script.js as well
 /**
  * Helper function meant to simulate a coin flip
@@ -148,8 +146,6 @@ var createBindingConstraint = function createBindingConstraintFromLiterals(assig
     if (assignor.charCodeAt(0) < 96) {
         throw Error("Invalid assignor");
     }
-    var sign = equal ? "=" : "≠";
-    var constraintString = "" + assignor + sign + assignee;
     return {
         bindingConstraint: {
             equal: equal,
@@ -158,7 +154,7 @@ var createBindingConstraint = function createBindingConstraintFromLiterals(assig
             assignor: assignor,
             assignee: assignee
         },
-        key: constraintString
+        key: assignor
     };
 };
 exports.createBindingConstraint = createBindingConstraint;
@@ -202,7 +198,7 @@ var updateAgendaAndConstraints = function condUpdateAgendaAndConstraints(action,
         // This is deterministic (as long as the order of preconditions doesn't change)
         // but this is another thing that could possibly be ordered explicitly
         var codeDesignationConstr = action.precondition.filter(function (lit) { return lit.action !== "neq"; });
-        var replaceMap = (0, exports.genReplaceMap)(action, variableBindings, false);
+        var replaceMap = (0, exports.genReplaceMap)(action, bindingConstraints, false);
         for (var _i = 0, codeDesignationConstr_1 = codeDesignationConstr; _i < codeDesignationConstr_1.length; _i++) {
             var constr = codeDesignationConstr_1[_i];
             // TODO: Add some step to get the domain literals mapped to the selected action
@@ -210,7 +206,9 @@ var updateAgendaAndConstraints = function condUpdateAgendaAndConstraints(action,
             var newParameters = [];
             for (var _a = 0, _b = constr.parameters; _a < _b.length; _a++) {
                 var param = _b[_a];
-                replaceMap.get(param) === undefined ? newParameters.push(param) : newParameters.push(replaceMap.get(param));
+                replaceMap.get(param) === undefined
+                    ? newParameters.push(param)
+                    : newParameters.push(replaceMap.get(param));
             }
             constrWithDomainParams.parameters = newParameters;
             (0, exports.pushToAgenda)(agenda, constrWithDomainParams, action.name);
@@ -260,13 +258,32 @@ var checkBindings = function checkBindingsForConflict(binding, argumentPairs, ar
     }
 };
 exports.checkBindings = checkBindings;
-// TODO: Add doctsring
+/**
+ * Pushes new bindings to the Binding Map
+ * @param currentBindings
+ * @param newBindings
+ */
 var updateBindingConstraints = function condUpdateBindingConstraints(currentBindings, newBindings) {
+    var _loop_1 = function (binding) {
+        var currentConstraints = currentBindings.get(binding.key);
+        if (currentConstraints === undefined) {
+            var newConstraintArray = [binding.bindingConstraint];
+            currentBindings.set(binding.key, newConstraintArray);
+        }
+        else {
+            if (
+            // we're checking to see if the constraint is already in the current set
+            currentConstraints.filter(function (x) {
+                return x.assignor === binding.bindingConstraint.assignor &&
+                    x.equal === binding.bindingConstraint.equal;
+            }).length === 0) {
+                currentConstraints.push(binding.bindingConstraint);
+            }
+        }
+    };
     for (var _i = 0, newBindings_1 = newBindings; _i < newBindings_1.length; _i++) {
         var binding = newBindings_1[_i];
-        if (currentBindings.has(binding.key) === false) {
-            currentBindings.set(binding.key, binding.bindingConstraint);
-        }
+        _loop_1(binding);
     }
 };
 exports.updateBindingConstraints = updateBindingConstraints;
@@ -294,7 +311,7 @@ var MGU = function findMostGenerialUnifier(Q, R, B) {
     }
     if (!bound) {
         // If there is at least one param that could be ANY domain param;
-        // - We should check the binding constraints to see if there are any 
+        // - We should check the binding constraints to see if there are any
         //   restrictions we should place on selecting the param
     }
     else {
@@ -396,7 +413,7 @@ exports.chooseAction = chooseAction;
 // and before the goal step (aInf)
 var updateOrderingConstraints = function (aAdd, aNeed, actions, orderingConstraints) {
     var orderingConstraintPrime;
-    if (actions.filter(function (x) { return (x.name === aAdd.name); }).length === 0) {
+    if (actions.filter(function (x) { return x.name === aAdd.name; }).length === 0) {
         // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
         // but given that assumption we create another constraint with name as first step
         // and tail as the new action
@@ -439,11 +456,15 @@ var getOppositeLiteral = function (lit) {
 exports.getOppositeLiteral = getOppositeLiteral;
 var genReplaceMap = function replaceParameters(action, variableBindings, domainKeys) {
     var replaceMap = new Map();
-    var justBindings = Array.from(variableBindings, function (_a) {
+    var justTrueBindings = Array.from(variableBindings, function (_a) {
         var name = _a[0], value = _a[1];
-        return value;
+        for (var _i = 0, value_1 = value; _i < value_1.length; _i++) {
+            var binding = value_1[_i];
+            if (binding.equal === true) {
+                return binding;
+            }
+        }
     });
-    var justTrueBindings = justBindings.filter(function (x) { return x.equal === true; });
     for (var _i = 0, _a = action.parameters; _i < _a.length; _i++) {
         var param = _a[_i];
         for (var index = 0; index < justTrueBindings.length; index++) {
@@ -526,7 +547,7 @@ var checkForThreats = function checkForThreatsGivenConstraints(action, orderingC
     // Within each causal link, we need to check to see if it's 'Q' matches the opposite
     // of any effects within the action we just added.
     var newOrderingConstraints = orderingConstraints.slice();
-    var _loop_1 = function (link) {
+    var _loop_2 = function (link) {
         // Because it's a single action, I don't know if it's possible to return more than
         // one result to potentialThreats
         var opEffect = (0, exports.getOppositeLiteral)(link.preposition);
@@ -560,7 +581,7 @@ var checkForThreats = function checkForThreatsGivenConstraints(action, orderingC
     };
     for (var _d = 0, causalLinks_1 = causalLinks; _d < causalLinks_1.length; _d++) {
         var link = causalLinks_1[_d];
-        var state_1 = _loop_1(link);
+        var state_1 = _loop_2(link);
         if (state_1 === "break")
             break;
     }
@@ -609,7 +630,7 @@ var POP = function PartialOrderPlan(plan, agenda, domain) {
     }
     else {
         // destructuring plan
-        var actions_1 = plan.actions, order = plan.order, links = plan.links, variableBindings_1 = plan.variableBindings;
+        var actions = plan.actions, order = plan.order, links = plan.links, variableBindings = plan.variableBindings;
         // 2. Goal selection
         // we choose an item in the agenda. right now we're selecting the first item
         // but it doesn't need to be. It's destructured into Q which is a constant, and
@@ -619,58 +640,30 @@ var POP = function PartialOrderPlan(plan, agenda, domain) {
         // TODO: Do we try and apply binding constraints here?
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
-        var action = (_b = (0, exports.chooseAction)(q, actions_1, domain, variableBindings_1), _b.action), newBindingConstraints = _b.newBindingConstraints;
+        var action = (_b = (0, exports.chooseAction)(q, actions, domain, variableBindings), _b.action), newBindingConstraints = _b.newBindingConstraints;
         // TODO: This whole group should be a conditional;
         // if the action is from the domain/has variables to replace
         var actionPrime = (0, exports.updateAction)(action);
         domain = (0, exports.replaceAction)(domain, actionPrime);
-        actions_1 = actions_1.concat(action);
+        actions = actions.concat(action);
         // Creating new inputs (iPrime) which will be called recursively in 6 below
         links = (0, exports.updateCausalLinks)(links, action, q, aNeed);
-        order = (0, exports.updateOrderingConstraints)(action, aNeed, actions_1, order);
+        order = (0, exports.updateOrderingConstraints)(action, aNeed, actions, order);
         // We mutate the original variableBindings, unlike all the other parts of the plan
-        (0, exports.updateBindingConstraints)(variableBindings_1, newBindingConstraints);
+        (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         // 4. Update the goal set
         agenda = agenda.slice(1);
         // This can potentially mutate both agendaPrime and variableBindings
-        (0, exports.updateAgendaAndConstraints)(action, actions_1, agenda, variableBindings_1);
+        (0, exports.updateAgendaAndConstraints)(action, actions, agenda, variableBindings);
         // 5. causal link protection
-        order = (0, exports.checkForThreats)(action, order, links, variableBindings_1);
+        order = (0, exports.checkForThreats)(action, order, links, variableBindings);
         // 6. recursive invocation
         (0, exports.POP)({
-            actions: actions_1,
+            actions: actions,
             order: order,
             links: links,
-            variableBindings: variableBindings_1
+            variableBindings: variableBindings
         }, agenda, domain);
     }
 };
 exports.POP = POP;
-// TODO: The null plan of any given problem should be the following. I should
-// represent that somewhere to initially call POP()
-//    · two actions (a0 and aInf)
-//    · one ordering constraint (a0 to aInf)
-//    · zero causal links and variable bindings/binding constraints
-var domain = parser_cjs_1.weldDomain.actions;
-var causalLinks = [];
-var orderingConstraints = [{ name: "init", tail: "goal" }];
-var variableBindings = new Map();
-var actions = parser_cjs_1.weldProblem.states;
-// init action needs to have "effect" property
-actions[0].effect = actions[0].actions;
-// goal action needs to have "precondition" property
-actions[1].precondition = actions[1].actions;
-var agenda = [];
-for (var _i = 0, _a = actions[1].precondition; _i < _a.length; _i++) {
-    var precond = _a[_i];
-    agenda.push({
-        q: precond,
-        name: "goal"
-    });
-}
-var result = (0, exports.POP)({
-    actions: actions,
-    order: orderingConstraints,
-    links: causalLinks,
-    variableBindings: variableBindings
-}, agenda, domain);

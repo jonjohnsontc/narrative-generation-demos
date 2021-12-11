@@ -1,5 +1,6 @@
 // TODO: Seeing if this will work for bringing in the parser module
 import parsed from "/Users/jonjohnson/dev/narrative-generation/shared-libs/parser/parser.cjs";
+import { newMGU, NewBindingMap } from "./newMGU";
 
 // Type Declarations
 export type VariableBinding = {
@@ -160,7 +161,10 @@ export const NoUnifierException = (literal) => {
  * @param {Array} b
  * @returns {Boolean}
  */
-export const pairMatch = function doVectorPairsMatch(a: Array<string>, b: Array<string>) {
+export const pairMatch = function doVectorPairsMatch(
+  a: Array<string>,
+  b: Array<string>
+) {
   if (a.length != 2) {
     throw Error("a length must be 2");
   }
@@ -198,9 +202,6 @@ export let createBindingConstraint =
       throw Error("Invalid assignor");
     }
 
-    let sign = equal ? "=" : "≠";
-    let constraintString = `${assignor}${sign}${assignee}`;
-
     return {
       bindingConstraint: {
         equal: equal,
@@ -210,7 +211,7 @@ export let createBindingConstraint =
         assignor: assignor,
         assignee: assignee,
       },
-      key: constraintString,
+      key: assignor,
     };
   };
 
@@ -251,7 +252,7 @@ export let updateAgendaAndConstraints = function condUpdateAgendaAndConstraints(
   action: Action,
   actions: Action[],
   agenda: AgendaItem[],
-  bindingConstraints: BindingMap
+  bindingConstraints: NewBindingMap
 ) {
   if (actions.find((x: Action) => x.name === action.name) !== undefined) {
     let nonCodeDesignationConstr = action.precondition.filter(
@@ -269,13 +270,15 @@ export let updateAgendaAndConstraints = function condUpdateAgendaAndConstraints(
     let codeDesignationConstr = action.precondition.filter(
       (lit) => lit.action !== "neq"
     );
-    let replaceMap = genReplaceMap(action, variableBindings, false);
+    let replaceMap = genReplaceMap(action, bindingConstraints, false);
     for (let constr of codeDesignationConstr) {
       // TODO: Add some step to get the domain literals mapped to the selected action
-      let constrWithDomainParams = {...constr};
+      let constrWithDomainParams = { ...constr };
       let newParameters = [];
       for (let param of constr.parameters) {
-        replaceMap.get(param) === undefined ? newParameters.push(param) : newParameters.push(replaceMap.get(param));
+        replaceMap.get(param) === undefined
+          ? newParameters.push(param)
+          : newParameters.push(replaceMap.get(param));
       }
       constrWithDomainParams.parameters = newParameters;
       pushToAgenda(agenda, constrWithDomainParams, action.name);
@@ -331,14 +334,32 @@ export let checkBindings = function checkBindingsForConflict(
     }
   }
 };
-// TODO: Add doctsring
+/**
+ * Pushes new bindings to the Binding Map
+ * @param currentBindings
+ * @param newBindings
+ */
 export let updateBindingConstraints = function condUpdateBindingConstraints(
-  currentBindings: BindingMap,
+  currentBindings: NewBindingMap,
   newBindings: Array<{ bindingConstraint: VariableBinding; key: string }>
 ) {
   for (let binding of newBindings) {
-    if (currentBindings.has(binding.key) === false) {
-      currentBindings.set(binding.key, binding.bindingConstraint);
+    let currentConstraints = currentBindings.get(binding.key);
+
+    if (currentConstraints === undefined) {
+      let newConstraintArray = [binding.bindingConstraint];
+      currentBindings.set(binding.key, newConstraintArray);
+    } else {
+      if (
+        // we're checking to see if the constraint is already in the current set
+        currentConstraints.filter(
+          (x) =>
+            x.assignor === binding.bindingConstraint.assignor &&
+            x.equal === binding.bindingConstraint.equal
+        ).length === 0
+      ) {
+        currentConstraints.push(binding.bindingConstraint);
+      }
     }
   }
 };
@@ -355,7 +376,6 @@ export let updateBindingConstraints = function condUpdateBindingConstraints(
 // TODO: Does this function work with a Q that has a bound and an un-bound variable?
 // TODO: This should work on actions with more than two parameters
 export let MGU = function findMostGenerialUnifier(Q, R, B) {
-  
   // We're checking if any param's in Q are unbound (aka some lowercase letter)
   // That means that any domain parameter should be valid
   let bound = true;
@@ -368,13 +388,12 @@ export let MGU = function findMostGenerialUnifier(Q, R, B) {
 
   if (!bound) {
     // If there is at least one param that could be ANY domain param;
-    // - We should check the binding constraints to see if there are any 
+    // - We should check the binding constraints to see if there are any
     //   restrictions we should place on selecting the param
   } else {
     // For the most general unifier, let's just assume Q's parameters
-    let QArgs = Q.parameters; 
+    let QArgs = Q.parameters;
   }
-  
 
   // binding each parameter with each value
   let qPairs = zip(R.parameters, Q.parameters);
@@ -480,7 +499,7 @@ export let updateOrderingConstraints = (
   orderingConstraints: OrderingConstraint[]
 ) => {
   let orderingConstraintPrime;
-  if (actions.filter((x) => (x.name === aAdd.name)).length === 0) {
+  if (actions.filter((x) => x.name === aAdd.name).length === 0) {
     // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
     // but given that assumption we create another constraint with name as first step
     // and tail as the new action
@@ -522,32 +541,40 @@ export let getOppositeLiteral = (lit: Literal) => {
   let opposite = lit.operation === "not" ? "" : "not";
   return { ...lit, operation: opposite };
 };
-export let genReplaceMap = function replaceParameters(action: Action, variableBindings: BindingMap, domainKeys: boolean): Map<string, string> {
+export let genReplaceMap = function replaceParameters(
+  action: Action,
+  variableBindings: NewBindingMap,
+  domainKeys: boolean
+): Map<string, string> {
   let replaceMap = new Map();
-  let justBindings = Array.from(variableBindings, ([name, value]) => value);
-  let justTrueBindings = justBindings.filter(x => x.equal === true)
-
-    for (let param of action.parameters) {
-      for (let index = 0; index < justTrueBindings.length; index++) {
-        if (justTrueBindings[index].assignor === param.parameter) {
-          if (domainKeys) {
-            replaceMap.set(justTrueBindings[index].assignee, param.parameter);
-          } else {
-            replaceMap.set(param.parameter, justTrueBindings[index].assignee);
-          }
-          break;
-        } else if (justTrueBindings[index].assignee === param.parameter) {
-          if (domainKeys) {
-            replaceMap.set(justTrueBindings[index].assignor, param.parameter);  
-          } else {
-            replaceMap.set(param.parameter, justTrueBindings[index].assignor);
-          }
-          break;
-        }
+  let justTrueBindings = Array.from(variableBindings, ([name, value]) => {
+    for (let binding of value) {
+      if (binding.equal === true) {
+        return binding;
       }
     }
-    return replaceMap
+  });
+  for (let param of action.parameters) {
+    for (let index = 0; index < justTrueBindings.length; index++) {
+      if (justTrueBindings[index].assignor === param.parameter) {
+        if (domainKeys) {
+          replaceMap.set(justTrueBindings[index].assignee, param.parameter);
+        } else {
+          replaceMap.set(param.parameter, justTrueBindings[index].assignee);
+        }
+        break;
+      } else if (justTrueBindings[index].assignee === param.parameter) {
+        if (domainKeys) {
+          replaceMap.set(justTrueBindings[index].assignor, param.parameter);
+        } else {
+          replaceMap.set(param.parameter, justTrueBindings[index].assignor);
+        }
+        break;
+      }
+    }
   }
+  return replaceMap;
+};
 /**
  * Checks for potential threats to the array of casual links based on the action chosen. If a threat exists,
  * a new ordering constraint should be created to mitigate.
@@ -562,7 +589,7 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
   action: Action,
   orderingConstraints: OrderingConstraint[],
   causalLinks: CausalLink[],
-  variableBindings: BindingMap
+  variableBindings: NewBindingMap
 ) {
   let replaceMap = genReplaceMap(action, variableBindings, false);
   // First, we need to bind the literal variable to the action's effect parameters
@@ -731,12 +758,7 @@ export let POP = function PartialOrderPlan(plan, agenda, domain) {
     updateAgendaAndConstraints(action, actions, agenda, variableBindings);
 
     // 5. causal link protection
-    order = checkForThreats(
-      action,
-      order,
-      links,
-      variableBindings
-    );
+    order = checkForThreats(action, order, links, variableBindings);
 
     // 6. recursive invocation
     POP(
@@ -750,39 +772,4 @@ export let POP = function PartialOrderPlan(plan, agenda, domain) {
       domain
     );
   }
-}
-
-// TODO: The null plan of any given problem should be the following. I should
-// represent that somewhere to initially call POP()
-//    · two actions (a0 and aInf)
-//    · one ordering constraint (a0 to aInf)
-//    · zero causal links and variable bindings/binding constraints
-const domain = parsed.weldDomain.actions;
-const causalLinks = [];
-const orderingConstraints = [{ name: "init", tail: "goal" }];
-const variableBindings = new Map();
-
-const actions = parsed.weldProblem.states;
-// init action needs to have "effect" property
-actions[0].effect = actions[0].actions;
-// goal action needs to have "precondition" property
-actions[1].precondition = actions[1].actions;
-
-const agenda = [];
-for (let precond of actions[1].precondition) {
-  agenda.push({
-    q: precond,
-    name: "goal",
-  });
-}
-
-const result = POP(
-  {
-    actions: actions,
-    order: orderingConstraints,
-    links: causalLinks,
-    variableBindings: variableBindings,
-  },
-  agenda,
-  domain
-);
+};

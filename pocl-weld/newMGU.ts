@@ -24,22 +24,22 @@ export const newMGU = function newFindMostGenerialUnifier(
     bindings: Array<VariableBinding | undefined>
   ): Function[] => {
     const funcs = [];
-    for (const binding of bindings) {
-      // We test to see if the bindingConstraint is there, or if it's undefined
-      // it will be undefined if there are no binding constraints for a param
-      if (binding) {
+    if (bindings) {
+      for (const binding of bindings) {
+        // We test to see if the bindingConstraint is there, or if it's undefined
+        // it will be undefined if there are no binding constraints for a param
         if (binding.equal) {
           funcs.push((param) => param === binding.assignee);
         } else {
           funcs.push((param) => param !== binding.assignee);
         }
-      } else {
-        // if the binding is undefined, we can return a fn that is always true
-        funcs.push(() => true);
       }
-    }
-    return funcs;
+    } else {
+    // if the binding is undefined, we can return a fn that is always true
+    funcs.push(() => true);
   };
+  return funcs;
+}
 
   const mapPermutationOnBindings = (
     permutation: string[],
@@ -94,8 +94,7 @@ export const newMGU = function newFindMostGenerialUnifier(
   for (const permutation of shuffledPermutations) {
     if (mapPermutationOnBindings(permutation, combinedFuncBindings)) {
       // add unifiers
-      const unifiers = createUnifiers(permutation, Q, R);
-      return unifiers;
+      return createUnifiers(permutation, Q, R);
     }
   }
   throw Error("Unable to find parameter that satisfies constraints");
