@@ -1,6 +1,6 @@
 // TODO: Seeing if this will work for bringing in the parser module
-import parsed from "/Users/jonjohnson/dev/narrative-generation/shared-libs/parser/parser.cjs";
 import { newMGU, NewBindingMap } from "./newMGU";
+import * as fs from "fs";
 
 // Type Declarations
 export type VariableBinding = {
@@ -41,12 +41,12 @@ export type ActionParam = {
   type: string | null;
 };
 
-type AgendaItem = {
+export type AgendaItem = {
   q: Literal;
-  name: string;
+  aAdd: string;
 };
 
-type Agenda = AgendaItem[];
+export type Agenda = AgendaItem[];
 
 type CausalLink = {
   createdBy: string; // action effect
@@ -84,6 +84,39 @@ export let isLiteralEqual = (lit1: Literal, lit2: Literal): boolean => {
     return true;
   } else {
     return false;
+  }
+};
+
+// TODO: this should be tied to bound/domain parameters
+export const createActionName = function createActionNameBasedOnParams(
+  action: Action
+): string {
+  const params = action.parameters;
+  let newName: string;
+  if (action.name.includes("move")) {
+    newName = `${action.name} ${params[0].parameter} from ${params[1].parameter} to ${params[2].parameter}`;
+  } else {
+    newName = `undefined behavior found!`;
+  }
+  return newName;
+};
+
+export const checkForNewLinkThreats = function verifyNoThreatsAgainstNewLink(
+  actions: Action[],
+  newLink: CausalLink
+): OrderingConstraint[] {
+  let potentialThreats: OrderingConstraint[] = [];
+  const opLiteral = getOppositeLiteral(newLink.preposition);
+
+  for (let action of actions) {
+    if (action.hasOwnProperty("effect")) {
+      if (
+        action.effect.filter((x) => isLiteralEqual(x, opLiteral)).length > 0
+      ) {
+        // Should we do anything with the potential threats?
+        // TODO: We need to add a constraint here
+      }
+    }
   }
 };
 
@@ -198,9 +231,9 @@ export let createBindingConstraint =
     equal: boolean
   ): { bindingConstraint: VariableBinding; key: string } {
     // Making sure the assignor is not capitalized
-    if (assignor.charCodeAt(0) < 96) {
-      throw Error("Invalid assignor");
-    }
+    // if (assignor.charCodeAt(0) < 96) {
+    //   throw Error("Invalid assignor");
+    // }
 
     return {
       bindingConstraint: {
@@ -241,7 +274,7 @@ export let pushToAgenda = function addItemToAgenda(
 ) {
   agenda.push({
     q: q,
-    name: name,
+    aAdd: name,
   });
 };
 /**
@@ -254,35 +287,33 @@ export let updateAgendaAndConstraints = function condUpdateAgendaAndConstraints(
   agenda: AgendaItem[],
   bindingConstraints: NewBindingMap
 ) {
-  if (actions.find((x: Action) => x.name === action.name) !== undefined) {
-    let nonCodeDesignationConstr = action.precondition.filter(
-      (lit) => lit.action === "neq"
-    );
+  let nonCodeDesignationConstr = action.precondition.filter(
+    (lit) => lit.action === "neq"
+  );
 
-    let newConstraints = nonCodeDesignationConstr.map((x) =>
-      createBindingConstraint(x.parameters[0], x.parameters[1], false)
-    );
+  let newConstraints = nonCodeDesignationConstr.map((x) =>
+    createBindingConstraint(x.parameters[0], x.parameters[1], false)
+  );
 
-    updateBindingConstraints(bindingConstraints, newConstraints);
+  updateBindingConstraints(bindingConstraints, newConstraints);
 
-    // This is deterministic (as long as the order of preconditions doesn't change)
-    // but this is another thing that could possibly be ordered explicitly
-    let codeDesignationConstr = action.precondition.filter(
-      (lit) => lit.action !== "neq"
-    );
-    let replaceMap = genReplaceMap(action, bindingConstraints, false);
-    for (let constr of codeDesignationConstr) {
-      // TODO: Add some step to get the domain literals mapped to the selected action
-      let constrWithDomainParams = { ...constr };
-      let newParameters = [];
-      for (let param of constr.parameters) {
-        replaceMap.get(param) === undefined
-          ? newParameters.push(param)
-          : newParameters.push(replaceMap.get(param));
-      }
-      constrWithDomainParams.parameters = newParameters;
-      pushToAgenda(agenda, constrWithDomainParams, action.name);
+  // This is deterministic (as long as the order of preconditions doesn't change)
+  // but this is another thing that could possibly be ordered explicitly
+  let codeDesignationConstr = action.precondition.filter(
+    (lit) => lit.action !== "neq"
+  );
+  let replaceMap = genReplaceMap(action, bindingConstraints, false);
+  for (let constr of codeDesignationConstr) {
+    // TODO: Add some step to get the domain literals mapped to the selected action
+    let constrWithDomainParams = { ...constr };
+    let newParameters = [];
+    for (let param of constr.parameters) {
+      replaceMap.get(param) === undefined
+        ? newParameters.push(param)
+        : newParameters.push(replaceMap.get(param));
     }
+    constrWithDomainParams.parameters = newParameters;
+    pushToAgenda(agenda, constrWithDomainParams, action.name);
   }
 };
 export let checkBindings = function checkBindingsForConflict(
@@ -436,57 +467,66 @@ export let isNew = function isActionNew(action) {
  * @param Q
  * @param actions
  * @param domain
+ * @param B
+ * @param objects
  * @returns An object containing an action, along with an array of binding constraints
  */
 export let chooseAction = function findActionThatSatisfiesQ(
   Q: Literal,
   actions: Action[],
   domain: Action[],
-  B: VariableBinding[] = []
+  B: NewBindingMap,
+  objects: ActionParam[]
 ) {
+  const allActions = actions.concat(domain);
   // Weld states that action can be chosen from either the array of actions
   // or the AOLArray, but does not give any guidance as to how the action
   // should be selected. I'm going for a super naive, actions array-first approach
-  let allActions = domain.concat(actions);
-
   for (let aAdd of allActions) {
-    // The choice of aAdd must consider all new & existing actions, such that
-    // one of aAdd's effects unifies with the goal given the plan's codesignation constraints
-    for (let effect of aAdd.effect) {
-      // If an effect matches the `action` Q, that means we have a match, and can perform
-      // MGU to ensure we have a matching set of arguments/parameters
-      if (Q.action === effect.action && Q.operation === effect.operation) {
-        try {
-          // TODO: If I'm going to always bind the variables before they hit the agenda,
-          // then I'm going to need to test which variables have been bound before they
-          // hit this function
-          let unifiers = MGU(Q, effect, B);
-          let newBindingConstraints = unifiers.map((x) =>
-            createBindConstrFromUnifier(x)
-          );
-          // TODO: We don't need a new name if the action isn't new
-          let newName = `${aAdd.name} - ${effect.parameters}`;
-          let aAddNewName = { ...aAdd, name: newName };
-
-          // the action needs to be returned to add to A
-          // newConstraints need to be returned to be added to B
-          return {
-            action: aAddNewName,
-            newBindingConstraints: newBindingConstraints,
-          };
-        } catch (error) {
-          // If MGU doesn't work, we should break out of the action, and into the next one
-          // TODO: I don't know if this will work
-          console.log(error);
-          break;
+    if (aAdd.hasOwnProperty("effect")) {
+      // The choice of aAdd must consider all new & existing actions, such that
+      // one of aAdd's effects unifies with the goal given the plan's codesignation constraints
+      for (let effect of aAdd.effect) {
+        // If an effect matches the `action` Q, that means we have a match, and can perform
+        // MGU to ensure we have a matching set of arguments/parameters
+        if (Q.action === effect.action && Q.operation === effect.operation) {
+          try {
+            // TODO: If I'm going to always bind the variables before they hit the agenda,
+            // then I'm going to need to test which variables have been bound before they
+            // hit this function
+            let unifiers = newMGU(Q, effect, B, objects);
+            let newBindingConstraints = unifiers.map((x) =>
+              createBindConstrFromUnifier(x)
+            );
+            debugger;
+            // is the action new??
+            let isNew: boolean;
+            // TODO: I can't filter through all actions, because it contains actions from the domain
+            if (actions.filter((x) => x.name === aAdd.name).length === 0) {
+              isNew = true;
+            } else {
+              isNew = false;
+            }
+            // the action needs to be returned to add to A
+            // newConstraints need to be returned to be added to B
+            return {
+              action: aAdd,
+              isNew: isNew,
+              newBindingConstraints: newBindingConstraints,
+            };
+          } catch (error) {
+            // TODO: Should I record failures, to optimize somehow?
+            // If MGU doesn't work, we should break out of the action, and into the next one
+            break;
+          }
         }
-      } else {
-        continue;
       }
+    } else {
+      continue;
     }
-    // If there is no action that can satisfy Q in either array, we return a failure
-    throw Error("no action matches Q, failure");
   }
+  // If there is no action that can satisfy Q in either array, we return a failure
+  throw Error("no action matches Q, failure");
 };
 
 // If aAdd is already in A, then let Oprime be all O's with aAdd before aNeed
@@ -495,11 +535,11 @@ export let chooseAction = function findActionThatSatisfiesQ(
 export let updateOrderingConstraints = (
   aAdd: Action,
   aNeed: string,
-  actions: Action[],
+  isNew: boolean,
   orderingConstraints: OrderingConstraint[]
 ) => {
   let orderingConstraintPrime;
-  if (actions.filter((x) => x.name === aAdd.name).length === 0) {
+  if (isNew) {
     // I don't *yet* know if ordering constraints are always 'lesser than' pairs (e.g, a < b)
     // but given that assumption we create another constraint with name as first step
     // and tail as the new action
@@ -547,13 +587,14 @@ export let genReplaceMap = function replaceParameters(
   domainKeys: boolean
 ): Map<string, string> {
   let replaceMap = new Map();
-  let justTrueBindings = Array.from(variableBindings, ([name, value]) => {
+  let trueBindings = Array.from(variableBindings, ([name, value]) => {
     for (let binding of value) {
       if (binding.equal === true) {
         return binding;
       }
     }
   });
+  let justTrueBindings = trueBindings.filter(Boolean);
   for (let param of action.parameters) {
     for (let index = 0; index < justTrueBindings.length; index++) {
       if (justTrueBindings[index].assignor === param.parameter) {
@@ -583,28 +624,16 @@ export let genReplaceMap = function replaceParameters(
  * @param orderingConstraints
  * @param causalLinks
  * @param variableBindings
+ * @param isNew
  * @returns
  */
 export let checkForThreats = function checkForThreatsGivenConstraints(
   action: Action,
   orderingConstraints: OrderingConstraint[],
   causalLinks: CausalLink[],
-  variableBindings: NewBindingMap
+  variableBindings: NewBindingMap,
+  isNew: boolean
 ) {
-  let replaceMap = genReplaceMap(action, variableBindings, false);
-  // First, we need to bind the literal variable to the action's effect parameters
-  // That way we can match a causal link with a threat just by comparing Literal objects
-  // As far as I know, we only need to bind the effects to their variable counterpart
-  let boundEffect = [];
-  for (let effect of action.effect) {
-    let newEffect = { ...effect, parameters: [] };
-    for (let param of effect.parameters) {
-      newEffect.parameters.push(replaceMap.get(param));
-    }
-    boundEffect.push(newEffect);
-  }
-  let boundAction = { ...action, effect: boundEffect };
-
   /**
    * Conditionally mutates/adds ordering constraints to current array of constraints,
    * respecting the rule `O = O' U {A0 < Aadd < AInf}`.
@@ -616,12 +645,16 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
    * @param action
    * @param ordConstr
    */
+  // TODO: This shouldn't add constraints that contradict previously applied ones, right?
   let condAddConstraints = (
     link: CausalLink,
     action: Action,
     ordConstr: OrderingConstraint[]
   ) => {
     if (link.createdBy === "init") {
+      // If the `init` step is the creator of the causalLink, then we know that the
+      // threat needs to be ordered after it, because nothing can be ordered prior
+      // to that step
       ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
     } else if (link.consumedBy === "goal") {
       ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
@@ -633,6 +666,26 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
       }
     }
   };
+
+  let boundAction: Action;
+  if (isNew) {
+    let replaceMap = genReplaceMap(action, variableBindings, false);
+    // First, we need to bind the literal variable to the action's effect parameters
+    // That way we can match a ca usal link with a threat just by comparing Literal objects
+    // As far as I know, we only need to bind the effects to their variable counterpart
+    let boundEffect = [];
+    for (let effect of action.effect) {
+      let newEffect = { ...effect, parameters: [] };
+      for (let param of effect.parameters) {
+        newEffect.parameters.push(replaceMap.get(param));
+      }
+      boundEffect.push(newEffect);
+    }
+    boundAction = { ...action, effect: boundEffect };
+  } else {
+    boundAction = { ...action };
+  }
+
   // Within each causal link, we need to check to see if it's 'Q' matches the opposite
   // of any effects within the action we just added.
   let newOrderingConstraints = orderingConstraints.slice();
@@ -645,12 +698,7 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
     );
     if (potentiaThreats.length !== 0) {
       // If there exists a threat from the action, we need to check the action to see if it's new
-      if (
-        orderingConstraints.filter((x) => x.name === action.name).length === 0
-      ) {
-        // If the `init` step is the creator of the causalLink, then we know that the
-        // threat needs to be ordered after it, because nothing can be ordered prior
-        // to that step
+      if (isNew) {
         condAddConstraints(link, action, newOrderingConstraints);
       } else {
         // If the action isn't new, we should check to see if
@@ -668,9 +716,9 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
       }
     }
   }
-  return newOrderingConstraints;
   // TODO: This should return failure if the threat still exists., ie the threat
   // is not ordered after the `consumedBy` or prior to the `createdBy` link
+  return newOrderingConstraints;
 };
 /**
  * Create a causal link
@@ -707,7 +755,7 @@ export let updateCausalLinks = (
  * @param agenda
  * @returns  A complete ordered plan
  */
-export let POP = function PartialOrderPlan(plan, agenda, domain) {
+export let POP = function PartialOrderPlan(plan, agenda, domain, objects) {
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
   // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
@@ -715,7 +763,12 @@ export let POP = function PartialOrderPlan(plan, agenda, domain) {
 
   // 1. If agenda is empty, and all preconditions and effects are covered, return <A, O, L>
   // TODO: Changed to help debug since the agenda doesn't appear to be getting smaller
-  if (plan.variableBindings.size === 50) {
+  if (agenda.length === 0) {
+    console.log("Plan complete");
+    const bindingObj = Object.fromEntries(plan.variableBindings);
+    plan.variableBindings = bindingObj;
+    const serializedPlan = JSON.stringify(plan);
+    fs.writeFileSync("./plan.json", serializedPlan);
     return plan;
   } else {
     // destructuring plan
@@ -725,29 +778,37 @@ export let POP = function PartialOrderPlan(plan, agenda, domain) {
     // we choose an item in the agenda. right now we're selecting the first item
     // but it doesn't need to be. It's destructured into Q which is a constant, and
     // `aNeed` which is the action that's precondition is Q
-    let { q, aNeed } = agenda[0];
-    debugger;
-    // TODO: Do we try and apply binding constraints here?
+    let { q, aAdd } = agenda[0];
+
+    // removing the action that sourced q
+    // TODO: I don't know yet if this will be necessary, or if I should
+    // have other guards against this happening
+    const filterActions = actions.filter((x) => x.name !== aAdd);
 
     // 3. Action selection
     // TODO: Where do I get domain from? Haven't come across a place in Weld
-    let { action, newBindingConstraints } = chooseAction(
+    let { action, isNew, newBindingConstraints } = chooseAction(
       q,
-      actions,
+      filterActions,
       domain,
-      variableBindings
+      variableBindings,
+      objects
     );
 
-    // TODO: This whole group should be a conditional;
-    // if the action is from the domain/has variables to replace
-    let actionPrime = updateAction(action);
-    domain = replaceAction(domain, actionPrime);
-    actions = actions.concat(action);
-
-    // Creating new inputs (iPrime) which will be called recursively in 6 below
-    links = updateCausalLinks(links, action, q, aNeed);
-    order = updateOrderingConstraints(action, aNeed, actions, order);
-
+    let newName;
+    let aAddNewName;
+    if (isNew) {
+      newName = createActionName(action);
+      aAddNewName = { ...action, name: newName };
+      let actionPrime = updateAction(action);
+      domain = replaceAction(domain, actionPrime);
+      actions = actions.concat(aAddNewName);
+      links = updateCausalLinks(links, aAddNewName, q, aAdd);
+      order = updateOrderingConstraints(aAddNewName, aAdd, isNew, order);
+    } else {
+      links = updateCausalLinks(links, action, q, aAdd);
+      order = updateOrderingConstraints(action, aAdd, isNew, order);
+    }
     // We mutate the original variableBindings, unlike all the other parts of the plan
     updateBindingConstraints(variableBindings, newBindingConstraints);
 
@@ -755,10 +816,17 @@ export let POP = function PartialOrderPlan(plan, agenda, domain) {
     agenda = agenda.slice(1);
 
     // This can potentially mutate both agendaPrime and variableBindings
-    updateAgendaAndConstraints(action, actions, agenda, variableBindings);
+    if (isNew && aAddNewName) {
+      updateAgendaAndConstraints(
+        aAddNewName,
+        actions,
+        agenda,
+        variableBindings
+      );
+    }
 
     // 5. causal link protection
-    order = checkForThreats(action, order, links, variableBindings);
+    order = checkForThreats(action, order, links, variableBindings, isNew);
 
     // 6. recursive invocation
     POP(
@@ -769,7 +837,8 @@ export let POP = function PartialOrderPlan(plan, agenda, domain) {
         variableBindings: variableBindings,
       },
       agenda,
-      domain
+      domain,
+      objects
     );
   }
 };

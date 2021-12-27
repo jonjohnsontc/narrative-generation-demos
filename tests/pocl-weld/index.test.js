@@ -321,7 +321,6 @@ test("genReplaceMap returns a map with the parameter-domainParameter k,v pairs i
     false
   );
 
-  // TODO: change expected results
   expect(domainParameterResult).toEqual(
     new Map([
       ["A", "b"],
@@ -336,35 +335,42 @@ test("genReplaceMap returns a map with the parameter-domainParameter k,v pairs i
   );
 });
 
-// test("POP successfully plans through partially ordered plan", () => {
-//   const domain = parsed.weldDomain.actions;
-//   const causalLinks = [];
-//   const orderingConstraints = [{ name: "init", tail: "goal" }];
+test("POP successfully plans through partially ordered plan", () => {
+  const domain = parsed.weldDomain.actions;
+  const causalLinks = [];
+  const orderingConstraints = [{ name: "init", tail: "goal" }];
+  const objects = parsed.weldProblem.objects;
 
-//   const actions = parsed.weldProblem.states;
-//   // init action needs to have "effect" property
-//   actions[0].effect = actions[0].actions;
-//   // goal action needs to have "precondition" property
-//   actions[1].precondition = actions[1].actions;
+  const actions = parsed.weldProblem.states;
+  // init action needs to have "effect" property
+  actions[0].effect = actions[0].actions;
+  // goal action needs to have "precondition" property
+  actions[1].precondition = actions[1].actions;
 
-//   const variableBindings = new Map();
-//   const agenda = [];
-//   for (let precond of actions[1].precondition) {
-//     agenda.push({
-//       q: precond,
-//       name: "goal",
-//     });
-//   }
-//   const result = pocl.POP(
-//     {
-//       actions: actions,
-//       order: orderingConstraints,
-//       links: causalLinks,
-//       variableBindings: variableBindings,
-//     },
-//     agenda,
-//     domain
-//   );
+  const variableBindings = new Map([
+    ["A", [{ equal: true, assignor: "A", assignee: "A" }]],
+    ["B", [{ equal: true, assignor: "B", assignee: "B" }]],
+    ["C", [{ equal: true, assignor: "C", assignee: "C" }]],
+    ["table", [{ equal: true, assignor: "table", assignee: "table" }]]
+  ]);
+  const agenda = [];
+  for (let precond of actions[1].precondition) {
+    agenda.push({
+      q: precond,
+      name: "goal",
+    });
+  }
+  const result = pocl.POP(
+    {
+      actions: actions,
+      order: orderingConstraints,
+      links: causalLinks,
+      variableBindings: variableBindings,
+    },
+    agenda,
+    domain,
+    objects
+  );
 
-//   expect(result).toHaveLength();
-// });
+  expect(result).toHaveLength(1);
+});

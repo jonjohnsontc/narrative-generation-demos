@@ -2,7 +2,7 @@
   (:domain blocksworld)
   (:objects
     A - block B - block C - block 
-    Table - table)
+    table - table)
   (:init (and (on C A) (clear B) (clear C)
-            (on A Table) (on B Table)))
+            (on A table) (on B table)))
   (:goal (and (on A B) (on B C))))
