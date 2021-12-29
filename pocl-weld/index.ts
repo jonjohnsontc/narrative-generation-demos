@@ -89,12 +89,15 @@ export let isLiteralEqual = (lit1: Literal, lit2: Literal): boolean => {
 
 // TODO: this should be tied to bound/domain parameters
 export const createActionName = function createActionNameBasedOnParams(
-  action: Action
+  action: Action,
+  variableBindings: NewBindingMap
 ): string {
+  const replaceMap = genReplaceMap(action, variableBindings, false);
   const params = action.parameters;
+  const boundParams = params.map((x) => replaceMap.get(x.parameter));
   let newName: string;
   if (action.name.includes("move")) {
-    newName = `${action.name} ${params[0].parameter} from ${params[1].parameter} to ${params[2].parameter}`;
+    newName = `${action.name} ${boundParams[0]} from ${boundParams[1]} to ${boundParams[2]}`;
   } else {
     newName = `undefined behavior found!`;
   }
@@ -795,10 +798,13 @@ export let POP = function PartialOrderPlan(plan, agenda, domain, objects) {
       objects
     );
 
+    // We mutate the original variableBindings, unlike all the other parts of the plan
+    updateBindingConstraints(variableBindings, newBindingConstraints);
+
     let newName;
     let aAddNewName;
     if (isNew) {
-      newName = createActionName(action);
+      newName = createActionName(action, variableBindings);
       aAddNewName = { ...action, name: newName };
       let actionPrime = updateAction(action);
       domain = replaceAction(domain, actionPrime);
@@ -809,8 +815,6 @@ export let POP = function PartialOrderPlan(plan, agenda, domain, objects) {
       links = updateCausalLinks(links, action, q, aAdd);
       order = updateOrderingConstraints(action, aAdd, isNew, order);
     }
-    // We mutate the original variableBindings, unlike all the other parts of the plan
-    updateBindingConstraints(variableBindings, newBindingConstraints);
 
     // 4. Update the goal set
     agenda = agenda.slice(1);

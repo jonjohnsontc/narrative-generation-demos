@@ -45,11 +45,14 @@ var isLiteralEqual = function (lit1, lit2) {
     }
 };
 exports.isLiteralEqual = isLiteralEqual;
-var createActionName = function createActionNameBasedOnParams(action) {
+// TODO: this should be tied to bound/domain parameters
+var createActionName = function createActionNameBasedOnParams(action, variableBindings) {
+    var replaceMap = (0, exports.genReplaceMap)(action, variableBindings, false);
     var params = action.parameters;
+    var boundParams = params.map(function (x) { return replaceMap.get(x.parameter); });
     var newName;
     if (action.name.includes("move")) {
-        newName = action.name + " " + params[0].parameter + " from " + params[1].parameter + " to " + params[2].parameter;
+        newName = action.name + " " + boundParams[0] + " from " + boundParams[1] + " to " + boundParams[2];
     }
     else {
         newName = "undefined behavior found!";
@@ -697,10 +700,12 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
         var action = (_b = (0, exports.chooseAction)(q, filterActions, domain, variableBindings, objects), _b.action), isNew_2 = _b.isNew, newBindingConstraints = _b.newBindingConstraints;
+        // We mutate the original variableBindings, unlike all the other parts of the plan
+        (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         var newName = void 0;
         var aAddNewName = void 0;
         if (isNew_2) {
-            newName = (0, exports.createActionName)(action);
+            newName = (0, exports.createActionName)(action, variableBindings);
             aAddNewName = __assign(__assign({}, action), { name: newName });
             var actionPrime = (0, exports.updateAction)(action);
             domain = (0, exports.replaceAction)(domain, actionPrime);
@@ -712,8 +717,6 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
             links = (0, exports.updateCausalLinks)(links, action, q, aAdd_1);
             order = (0, exports.updateOrderingConstraints)(action, aAdd_1, isNew_2, order);
         }
-        // We mutate the original variableBindings, unlike all the other parts of the plan
-        (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         // 4. Update the goal set
         agenda = agenda.slice(1);
         // This can potentially mutate both agendaPrime and variableBindings
