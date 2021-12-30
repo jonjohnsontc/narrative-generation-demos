@@ -104,11 +104,14 @@ export const createActionName = function createActionNameBasedOnParams(
   return newName;
 };
 
+// TODO: In order to use this, I need to have the new link before updating all of the causal links
+// Right now, new links are created and updated to the causal link array in the same function, so it's
+// never returned. I could also add this to the `updateCausalLinks` function, but that feels too hidden
 export const checkForNewLinkThreats = function verifyNoThreatsAgainstNewLink(
   actions: Action[],
-  newLink: CausalLink
-): OrderingConstraint[] {
-  let potentialThreats: OrderingConstraint[] = [];
+  newLink: CausalLink,
+  orderingConstraints: OrderingConstraint[]
+) {
   const opLiteral = getOppositeLiteral(newLink.preposition);
 
   for (let action of actions) {
@@ -118,6 +121,7 @@ export const checkForNewLinkThreats = function verifyNoThreatsAgainstNewLink(
       ) {
         // Should we do anything with the potential threats?
         // TODO: We need to add a constraint here
+        condAddConstraints(newLink, action, orderingConstraints);
       }
     }
   }
@@ -620,6 +624,38 @@ export let genReplaceMap = function replaceParameters(
   return replaceMap;
 };
 /**
+ * Conditionally mutates/adds ordering constraints to current array of constraints,
+ * respecting the rule `O = O' U {A0 < Aadd < AInf}`.
+ *
+ * If the link being threatenened is connected to the first action, then the new ordering
+ * constraint is guaranteed to be occuring after the actions in the link. Otherwise,
+ * whether the new constraint occurs before or after the link is up to chance
+ * @param link
+ * @param action
+ * @param ordConstr
+ */
+// TODO: This shouldn't add constraints that contradict previously applied ones, right?
+export let condAddConstraints = (
+  link: CausalLink,
+  action: Action,
+  ordConstr: OrderingConstraint[]
+) => {
+  if (link.createdBy === "init") {
+    // If the `init` step is the creator of the causalLink, then we know that the
+    // threat needs to be ordered after it, because nothing can be ordered prior
+    // to that step
+    ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
+  } else if (link.consumedBy === "goal") {
+    ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
+  } else {
+    if (coinFlip() === 0) {
+      ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
+    } else {
+      ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
+    }
+  }
+};
+/**
  * Checks for potential threats to the array of casual links based on the action chosen. If a threat exists,
  * a new ordering constraint should be created to mitigate.
  *
@@ -637,39 +673,6 @@ export let checkForThreats = function checkForThreatsGivenConstraints(
   variableBindings: NewBindingMap,
   isNew: boolean
 ) {
-  /**
-   * Conditionally mutates/adds ordering constraints to current array of constraints,
-   * respecting the rule `O = O' U {A0 < Aadd < AInf}`.
-   *
-   * If the link being threatenened is connected to the first action, then the new ordering
-   * constraint is guaranteed to be occuring after the actions in the link. Otherwise,
-   * whether the new constraint occurs before or after the link is up to chance
-   * @param link
-   * @param action
-   * @param ordConstr
-   */
-  // TODO: This shouldn't add constraints that contradict previously applied ones, right?
-  let condAddConstraints = (
-    link: CausalLink,
-    action: Action,
-    ordConstr: OrderingConstraint[]
-  ) => {
-    if (link.createdBy === "init") {
-      // If the `init` step is the creator of the causalLink, then we know that the
-      // threat needs to be ordered after it, because nothing can be ordered prior
-      // to that step
-      ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
-    } else if (link.consumedBy === "goal") {
-      ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
-    } else {
-      if (coinFlip() === 0) {
-        ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
-      } else {
-        ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
-      }
-    }
-  };
-
   let boundAction: Action;
   if (isNew) {
     let replaceMap = genReplaceMap(action, variableBindings, false);
@@ -750,6 +753,7 @@ export let updateCausalLinks = (
   aNeed: string
 ) => {
   let newCausalLink = createCausalLink(action.name, aNeed, Q);
+
   return causalLinks.concat(newCausalLink);
 };
 /**

@@ -11,7 +11,7 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.POP = exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.genReplaceMap = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndConstraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.checkForNewLinkThreats = exports.createActionName = exports.isLiteralEqual = exports.zip = void 0;
+exports.POP = exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.condAddConstraints = exports.genReplaceMap = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndConstraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.checkForNewLinkThreats = exports.createActionName = exports.isLiteralEqual = exports.zip = void 0;
 // TODO: Seeing if this will work for bringing in the parser module
 var newMGU_1 = require("./newMGU");
 var fs = require("fs");
@@ -60,8 +60,10 @@ var createActionName = function createActionNameBasedOnParams(action, variableBi
     return newName;
 };
 exports.createActionName = createActionName;
-var checkForNewLinkThreats = function verifyNoThreatsAgainstNewLink(actions, newLink) {
-    var potentialThreats = [];
+// TODO: In order to use this, I need to have the new link before updating all of the causal links
+// Right now, new links are created and updated to the causal link array in the same function, so it's
+// never returned. I could also add this to the `updateCausalLinks` function, but that feels too hidden
+var checkForNewLinkThreats = function verifyNoThreatsAgainstNewLink(actions, newLink, orderingConstraints) {
     var opLiteral = (0, exports.getOppositeLiteral)(newLink.preposition);
     for (var _i = 0, actions_1 = actions; _i < actions_1.length; _i++) {
         var action = actions_1[_i];
@@ -69,6 +71,7 @@ var checkForNewLinkThreats = function verifyNoThreatsAgainstNewLink(actions, new
             if (action.effect.filter(function (x) { return (0, exports.isLiteralEqual)(x, opLiteral); }).length > 0) {
                 // Should we do anything with the potential threats?
                 // TODO: We need to add a constraint here
+                (0, exports.condAddConstraints)(newLink, action, orderingConstraints);
             }
         }
     }
@@ -536,6 +539,38 @@ var genReplaceMap = function replaceParameters(action, variableBindings, domainK
 };
 exports.genReplaceMap = genReplaceMap;
 /**
+ * Conditionally mutates/adds ordering constraints to current array of constraints,
+ * respecting the rule `O = O' U {A0 < Aadd < AInf}`.
+ *
+ * If the link being threatenened is connected to the first action, then the new ordering
+ * constraint is guaranteed to be occuring after the actions in the link. Otherwise,
+ * whether the new constraint occurs before or after the link is up to chance
+ * @param link
+ * @param action
+ * @param ordConstr
+ */
+// TODO: This shouldn't add constraints that contradict previously applied ones, right?
+var condAddConstraints = function (link, action, ordConstr) {
+    if (link.createdBy === "init") {
+        // If the `init` step is the creator of the causalLink, then we know that the
+        // threat needs to be ordered after it, because nothing can be ordered prior
+        // to that step
+        ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
+    }
+    else if (link.consumedBy === "goal") {
+        ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
+    }
+    else {
+        if (coinFlip() === 0) {
+            ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
+        }
+        else {
+            ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
+        }
+    }
+};
+exports.condAddConstraints = condAddConstraints;
+/**
  * Checks for potential threats to the array of casual links based on the action chosen. If a threat exists,
  * a new ordering constraint should be created to mitigate.
  *
@@ -547,37 +582,6 @@ exports.genReplaceMap = genReplaceMap;
  * @returns
  */
 var checkForThreats = function checkForThreatsGivenConstraints(action, orderingConstraints, causalLinks, variableBindings, isNew) {
-    /**
-     * Conditionally mutates/adds ordering constraints to current array of constraints,
-     * respecting the rule `O = O' U {A0 < Aadd < AInf}`.
-     *
-     * If the link being threatenened is connected to the first action, then the new ordering
-     * constraint is guaranteed to be occuring after the actions in the link. Otherwise,
-     * whether the new constraint occurs before or after the link is up to chance
-     * @param link
-     * @param action
-     * @param ordConstr
-     */
-    // TODO: This shouldn't add constraints that contradict previously applied ones, right?
-    var condAddConstraints = function (link, action, ordConstr) {
-        if (link.createdBy === "init") {
-            // If the `init` step is the creator of the causalLink, then we know that the
-            // threat needs to be ordered after it, because nothing can be ordered prior
-            // to that step
-            ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
-        }
-        else if (link.consumedBy === "goal") {
-            ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
-        }
-        else {
-            if (coinFlip() === 0) {
-                ordConstr.push(createOrderingConstraint(action.name, link.createdBy));
-            }
-            else {
-                ordConstr.push(createOrderingConstraint(link.consumedBy, action.name));
-            }
-        }
-    };
     var boundAction;
     if (isNew) {
         var replaceMap = (0, exports.genReplaceMap)(action, variableBindings, false);
@@ -612,7 +616,7 @@ var checkForThreats = function checkForThreatsGivenConstraints(action, orderingC
         if (potentiaThreats.length !== 0) {
             // If there exists a threat from the action, we need to check the action to see if it's new
             if (isNew) {
-                condAddConstraints(link, action, newOrderingConstraints);
+                (0, exports.condAddConstraints)(link, action, newOrderingConstraints);
             }
             else {
                 // If the action isn't new, we should check to see if
@@ -626,7 +630,7 @@ var checkForThreats = function checkForThreatsGivenConstraints(action, orderingC
                     return "break";
                 }
                 else {
-                    condAddConstraints(link, action, newOrderingConstraints);
+                    (0, exports.condAddConstraints)(link, action, newOrderingConstraints);
                 }
             }
         }
