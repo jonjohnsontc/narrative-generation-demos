@@ -706,19 +706,20 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
         var action = (_b = (0, exports.chooseAction)(q, filterActions, domain, variableBindings, objects), _b.action), isNew_2 = _b.isNew, newBindingConstraints = _b.newBindingConstraints;
         // We mutate the original variableBindings, unlike all the other parts of the plan
         (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
-        var newName = void 0;
-        var aAddNewName = void 0;
+        var newName = void 0, aAddNewName = void 0;
         if (isNew_2) {
             newName = (0, exports.createActionName)(action, variableBindings);
             aAddNewName = __assign(__assign({}, action), { name: newName });
             var actionPrime = (0, exports.updateAction)(action);
             domain = (0, exports.replaceAction)(domain, actionPrime);
             actions = actions.concat(aAddNewName);
-            links = (0, exports.updateCausalLinks)(links, aAddNewName, q, aAdd_1);
+            var newLink = (0, exports.createCausalLink)(aAddNewName.name, aAdd_1, q);
+            links = links.concat(newLink);
             order = (0, exports.updateOrderingConstraints)(aAddNewName, aAdd_1, isNew_2, order);
         }
         else {
-            links = (0, exports.updateCausalLinks)(links, action, q, aAdd_1);
+            var newLink = (0, exports.createCausalLink)(action.name, aAdd_1, q);
+            links = links.concat(newLink);
             order = (0, exports.updateOrderingConstraints)(action, aAdd_1, isNew_2, order);
         }
         // 4. Update the goal set

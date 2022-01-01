@@ -805,18 +805,19 @@ export let POP = function PartialOrderPlan(plan, agenda, domain, objects) {
     // We mutate the original variableBindings, unlike all the other parts of the plan
     updateBindingConstraints(variableBindings, newBindingConstraints);
 
-    let newName;
-    let aAddNewName;
+    let newName, aAddNewName;
     if (isNew) {
       newName = createActionName(action, variableBindings);
       aAddNewName = { ...action, name: newName };
       let actionPrime = updateAction(action);
       domain = replaceAction(domain, actionPrime);
       actions = actions.concat(aAddNewName);
-      links = updateCausalLinks(links, aAddNewName, q, aAdd);
+      let newLink = createCausalLink(aAddNewName.name, aAdd, q);
+      links = links.concat(newLink);
       order = updateOrderingConstraints(aAddNewName, aAdd, isNew, order);
     } else {
-      links = updateCausalLinks(links, action, q, aAdd);
+      let newLink = createCausalLink(action.name, aAdd, q);
+      links = links.concat(newLink);
       order = updateOrderingConstraints(action, aAdd, isNew, order);
     }
 
