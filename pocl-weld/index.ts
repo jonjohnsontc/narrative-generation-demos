@@ -1,5 +1,7 @@
 // TODO: Seeing if this will work for bringing in the parser module
-import { newMGU, NewBindingMap } from "./newMGU";
+import { newMGU } from "./newMGU";
+import { NewBindingMap } from "./types";
+import { resActionNameInPlan } from "./utils/nameResolution";
 import * as fs from "fs";
 
 // Type Declarations
@@ -11,7 +13,7 @@ export type VariableBinding = {
 
 export type BindingMap = Map<PropertyKey, VariableBinding>;
 
-type OrderingConstraint = {
+export type OrderingConstraint = {
   name: string;
   tail: string;
 };
@@ -22,7 +24,7 @@ export type Literal = {
   parameters: readonly string[];
 };
 
-type Action = {
+export type Action = {
   name: string;
   parameters: readonly ActionParam[];
   precondition: readonly Literal[];
@@ -48,7 +50,7 @@ export type AgendaItem = {
 
 export type Agenda = AgendaItem[];
 
-type CausalLink = {
+export type CausalLink = {
   createdBy: string; // action effect
   consumedBy: string; // action precondition
 
@@ -402,71 +404,28 @@ export let updateBindingConstraints = function condUpdateBindingConstraints(
   }
 };
 
-/**
- * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B.
- * So if Q has parameters: ['b', 'c'], and R has parameters: ['p1', 'p2'], and variable bindings are: [],
- * we would return: ['b', 'c']
- * @param {Literal} Q Literal - first portion of an agenda that needs to be satisfied
- * @param {Literal} R Literal - likely an effect of an action
- * @param {any} B Vector of (non)codedesignation constraints
- * @returns {any} Most general unifier of literals
- */
-// TODO: Does this function work with a Q that has a bound and an un-bound variable?
-// TODO: This should work on actions with more than two parameters
-export let MGU = function findMostGenerialUnifier(Q, R, B) {
-  // We're checking if any param's in Q are unbound (aka some lowercase letter)
-  // That means that any domain parameter should be valid
-  let bound = true;
-  for (let param of Q.parameters) {
-    if (param.charCodeAt(0) < 96) {
-      bound = false;
-      break;
-    }
-  }
-
-  if (!bound) {
-    // If there is at least one param that could be ANY domain param;
-    // - We should check the binding constraints to see if there are any
-    //   restrictions we should place on selecting the param
-  } else {
-    // For the most general unifier, let's just assume Q's parameters
-    let QArgs = Q.parameters;
-  }
-
-  // binding each parameter with each value
-  let qPairs = zip(R.parameters, Q.parameters);
-
-  // These are variable bindings as maps e.g., {b1: 'C'}
-  let qMaps = qPairs.map((x) => new Map().set(x[0], x[1]));
-
-  // If we have any bindings, we can evaluate them against Q and R's parameters
-  if (B.length > 0) {
-    for (let binding of B) {
-      // If any binding parameters are equal to any of Q's or the effects parameters, we will evaluate
-      // via `checkBindings`
-      if (
-        binding.assignee === QArgs[0] ||
-        binding.assignee === QArgs[1] ||
-        binding.assignee === R.parameters[0] ||
-        binding.assignee === R.parameters[1] ||
-        binding.assignor === QArgs[0] ||
-        binding.assignor === QArgs[1] ||
-        binding.assignor === R.parameters[0] ||
-        binding.assignor === R.parameters[1]
-      ) {
-        if (checkBindings(binding, qPairs, qMaps)) {
-          continue;
-        } else {
-          throw NoUnifierException(Q);
-        }
-      }
-    }
-  }
-  return qMaps;
-};
-
 export let isNew = function isActionNew(action) {
   return action.parameters[0].parameter.charCodeAt(0) > 96;
+};
+
+/**
+ * Checks ordering consistency between action selected and the action sourced from the agenda
+ */
+export const checkOrdConsistency = function checkOrderingConsistency(
+  selectedAction: Action,
+  aNeed: string,
+  orderingConstraints: OrderingConstraint[]
+) {
+  const constrToCheck = orderingConstraints.filter((x) => x.name === aNeed);
+  if (constrToCheck.length === 0) {
+    return;
+  } else {
+    constrToCheck.forEach((constr) => {
+      if (constr.tail === selectedAction.name) {
+        throw Error("selected action is already ordered after Q");
+      }
+    });
+  }
 };
 
 /**
@@ -480,10 +439,12 @@ export let isNew = function isActionNew(action) {
  */
 export let chooseAction = function findActionThatSatisfiesQ(
   Q: Literal,
+  prevActionName: string,
   actions: Action[],
   domain: Action[],
   B: NewBindingMap,
-  objects: ActionParam[]
+  objects: ActionParam[],
+  orderingConstraints: OrderingConstraint[]
 ) {
   const allActions = actions.concat(domain);
   // Weld states that action can be chosen from either the array of actions
@@ -501,11 +462,11 @@ export let chooseAction = function findActionThatSatisfiesQ(
             // TODO: If I'm going to always bind the variables before they hit the agenda,
             // then I'm going to need to test which variables have been bound before they
             // hit this function
+            checkOrdConsistency(aAdd, prevActionName, orderingConstraints);
             let unifiers = newMGU(Q, effect, B, objects);
             let newBindingConstraints = unifiers.map((x) =>
               createBindConstrFromUnifier(x)
             );
-            debugger;
             // is the action new??
             let isNew: boolean;
             // TODO: I can't filter through all actions, because it contains actions from the domain
@@ -588,6 +549,7 @@ export let getOppositeLiteral = (lit: Literal) => {
   let opposite = lit.operation === "not" ? "" : "not";
   return { ...lit, operation: opposite };
 };
+// TODOJON: This should be in a utils folder/module
 export let genReplaceMap = function replaceParameters(
   action: Action,
   variableBindings: NewBindingMap,
@@ -762,7 +724,17 @@ export let updateCausalLinks = (
  * @param agenda
  * @returns  A complete ordered plan
  */
-export let POP = function PartialOrderPlan(plan, agenda, domain, objects) {
+export let POP = function PartialOrderPlan(
+  plan: {
+    actions: Action[];
+    order: OrderingConstraint[];
+    links: CausalLink[];
+    variableBindings: NewBindingMap;
+  },
+  agenda: Agenda,
+  domain: Action[],
+  objects: ActionParam[]
+) {
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
   // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
@@ -788,20 +760,22 @@ export let POP = function PartialOrderPlan(plan, agenda, domain, objects) {
     let { q, aAdd } = agenda[0];
 
     // removing the action that sourced q
-    // TODO: I don't know yet if this will be necessary, or if I should
-    // have other guards against this happening
+    // TODO: I don't know yet if this is necessary + checkOrdConsistency during
+    // chooseAction should also guard against this
     const filterActions = actions.filter((x) => x.name !== aAdd);
 
     // 3. Action selection
     // TODO: Where do I get domain from? Haven't come across a place in Weld
     let { action, isNew, newBindingConstraints } = chooseAction(
       q,
+      aAdd,
       filterActions,
       domain,
       variableBindings,
-      objects
+      objects,
+      order
     );
-
+    debugger;
     // We mutate the original variableBindings, unlike all the other parts of the plan
     updateBindingConstraints(variableBindings, newBindingConstraints);
 
@@ -813,12 +787,39 @@ export let POP = function PartialOrderPlan(plan, agenda, domain, objects) {
       domain = replaceAction(domain, actionPrime);
       actions = actions.concat(aAddNewName);
       let newLink = createCausalLink(aAddNewName.name, aAdd, q);
+      checkForNewLinkThreats(actions, newLink, order);
       links = links.concat(newLink);
       order = updateOrderingConstraints(aAddNewName, aAdd, isNew, order);
     } else {
+      // If the action name was prev partially undefined, we resolve the name throughout the plan
+      if (action.name.includes("undefined")) {
+        resActionNameInPlan(
+          action,
+          variableBindings,
+          actions,
+          order,
+          links,
+          agenda
+        );
+      }
+
       let newLink = createCausalLink(action.name, aAdd, q);
+      checkForNewLinkThreats(actions, newLink, order);
       links = links.concat(newLink);
       order = updateOrderingConstraints(action, aAdd, isNew, order);
+    }
+
+    // If the action tied to q was prev partially undefined, we resolve its name as well
+    if (aAdd.includes("undefined")) {
+      const qAction = actions.filter((x) => x.name === aAdd).pop();
+      resActionNameInPlan(
+        qAction,
+        variableBindings,
+        actions,
+        order,
+        links,
+        agenda
+      );
     }
 
     // 4. Update the goal set

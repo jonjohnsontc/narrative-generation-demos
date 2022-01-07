@@ -10,7 +10,7 @@ import { permute } from "../shared-libs/permutations";
 // a copy of the binding for each parameter involved
 export type NewBindingMap = Map<string, VariableBinding[]>;
 
-// My attempt at a better MGU if I started from scratch
+// My attempt at a better MGU if I startepile from scratch
 // Right now, this incorporates the idea of "objects", which I sourced from Kory Becker's strips.js
 // In my study of Weld's POCL so far, there isn't a concept like this
 export const newMGU = function newFindMostGenerialUnifier(
@@ -19,7 +19,6 @@ export const newMGU = function newFindMostGenerialUnifier(
   variableBindings: NewBindingMap,
   objects: ActionParam[]
 ): Map<string, string>[] {
-  
   const functionizeBindings = (
     bindings: Array<VariableBinding | undefined>
   ): Function[] => {
@@ -35,11 +34,11 @@ export const newMGU = function newFindMostGenerialUnifier(
         }
       }
     } else {
-    // if the binding is undefined, we can return a fn that is always true
-    funcs.push(() => true);
+      // if the binding is undefined, we can return a fn that is always true
+      funcs.push(() => true);
+    }
+    return funcs;
   };
-  return funcs;
-}
 
   const mapPermutationOnBindings = (
     permutation: string[],
@@ -54,7 +53,11 @@ export const newMGU = function newFindMostGenerialUnifier(
     return verdicts.reduce((p, c) => (c ? p : false));
   };
 
-  const createUnifiers = (permutation: string[], Q: Literal, R:Literal): Map<string, string>[] => {
+  const createUnifiers = (
+    permutation: string[],
+    Q: Literal,
+    R: Literal
+  ): Map<string, string>[] => {
     let unifiers: Set<Map<string, string>> = new Set();
     for (let i = 0; i < Q.parameters.length; i++) {
       unifiers.add(new Map([[Q.parameters[i], permutation[i]]]));
@@ -73,15 +76,15 @@ export const newMGU = function newFindMostGenerialUnifier(
     boundRParams.push(variableBindings.get(R.parameters[i]));
   }
 
-  const qFuncs = boundQParams.map(x => functionizeBindings(x));
-  const rFuncs = boundRParams.map(x => functionizeBindings(x));
+  const qFuncs = boundQParams.map((x) => functionizeBindings(x));
+  const rFuncs = boundRParams.map((x) => functionizeBindings(x));
 
   const combinedFuncBindings = [];
   for (let i = 0; i < Q.parameters.length; i++) {
     combinedFuncBindings.push(qFuncs[i].concat(rFuncs[i]));
   }
 
-  const justObjectVals = Array.from(objects, x => x.parameter)
+  const justObjectVals = Array.from(objects, (x) => x.parameter);
 
   const combinations: string[][] = kCombinations(
     justObjectVals,
@@ -89,7 +92,7 @@ export const newMGU = function newFindMostGenerialUnifier(
   );
   const permutations = combinations.flatMap((x) => permute(x));
   const shuffledPermutations = shuffleArray(permutations);
-  
+
   // we need to run permutations of objects through each "set" or index of bindings
   for (const permutation of shuffledPermutations) {
     if (mapPermutationOnBindings(permutation, combinedFuncBindings)) {

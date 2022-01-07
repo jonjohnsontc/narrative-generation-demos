@@ -11,9 +11,10 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.POP = exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.condAddConstraints = exports.genReplaceMap = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.isNew = exports.MGU = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndConstraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.checkForNewLinkThreats = exports.createActionName = exports.isLiteralEqual = exports.zip = void 0;
+exports.POP = exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.condAddConstraints = exports.genReplaceMap = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.checkOrdConsistency = exports.isNew = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndConstraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.checkForNewLinkThreats = exports.createActionName = exports.isLiteralEqual = exports.zip = void 0;
 // TODO: Seeing if this will work for bringing in the parser module
 var newMGU_1 = require("./newMGU");
+var nameResolution_1 = require("./utils/nameResolution");
 var fs = require("fs");
 // I have this in cpopl/script.js as well
 /**
@@ -320,71 +321,27 @@ var updateBindingConstraints = function condUpdateBindingConstraints(currentBind
     }
 };
 exports.updateBindingConstraints = updateBindingConstraints;
-/**
- * A function that returns the most general unifier of literals Q & R with respect to the codedesignation constraints in B.
- * So if Q has parameters: ['b', 'c'], and R has parameters: ['p1', 'p2'], and variable bindings are: [],
- * we would return: ['b', 'c']
- * @param {Literal} Q Literal - first portion of an agenda that needs to be satisfied
- * @param {Literal} R Literal - likely an effect of an action
- * @param {any} B Vector of (non)codedesignation constraints
- * @returns {any} Most general unifier of literals
- */
-// TODO: Does this function work with a Q that has a bound and an un-bound variable?
-// TODO: This should work on actions with more than two parameters
-var MGU = function findMostGenerialUnifier(Q, R, B) {
-    // We're checking if any param's in Q are unbound (aka some lowercase letter)
-    // That means that any domain parameter should be valid
-    var bound = true;
-    for (var _i = 0, _a = Q.parameters; _i < _a.length; _i++) {
-        var param = _a[_i];
-        if (param.charCodeAt(0) < 96) {
-            bound = false;
-            break;
-        }
-    }
-    if (!bound) {
-        // If there is at least one param that could be ANY domain param;
-        // - We should check the binding constraints to see if there are any
-        //   restrictions we should place on selecting the param
-    }
-    else {
-        // For the most general unifier, let's just assume Q's parameters
-        var QArgs = Q.parameters;
-    }
-    // binding each parameter with each value
-    var qPairs = (0, exports.zip)(R.parameters, Q.parameters);
-    // These are variable bindings as maps e.g., {b1: 'C'}
-    var qMaps = qPairs.map(function (x) { return new Map().set(x[0], x[1]); });
-    // If we have any bindings, we can evaluate them against Q and R's parameters
-    if (B.length > 0) {
-        for (var _b = 0, B_1 = B; _b < B_1.length; _b++) {
-            var binding = B_1[_b];
-            // If any binding parameters are equal to any of Q's or the effects parameters, we will evaluate
-            // via `checkBindings`
-            if (binding.assignee === QArgs[0] ||
-                binding.assignee === QArgs[1] ||
-                binding.assignee === R.parameters[0] ||
-                binding.assignee === R.parameters[1] ||
-                binding.assignor === QArgs[0] ||
-                binding.assignor === QArgs[1] ||
-                binding.assignor === R.parameters[0] ||
-                binding.assignor === R.parameters[1]) {
-                if ((0, exports.checkBindings)(binding, qPairs, qMaps)) {
-                    continue;
-                }
-                else {
-                    throw (0, exports.NoUnifierException)(Q);
-                }
-            }
-        }
-    }
-    return qMaps;
-};
-exports.MGU = MGU;
 var isNew = function isActionNew(action) {
     return action.parameters[0].parameter.charCodeAt(0) > 96;
 };
 exports.isNew = isNew;
+/**
+ * Checks ordering consistency between action selected and the action sourced from the agenda
+ */
+var checkOrdConsistency = function checkOrderingConsistency(selectedAction, aNeed, orderingConstraints) {
+    var constrToCheck = orderingConstraints.filter(function (x) { return x.name === aNeed; });
+    if (constrToCheck.length === 0) {
+        return;
+    }
+    else {
+        constrToCheck.forEach(function (constr) {
+            if (constr.tail === selectedAction.name) {
+                throw Error("selected action is already ordered after Q");
+            }
+        });
+    }
+};
+exports.checkOrdConsistency = checkOrdConsistency;
 /**
  * Given Q, selects an action from the set of AOLArray and actions.
  * @param Q
@@ -394,7 +351,7 @@ exports.isNew = isNew;
  * @param objects
  * @returns An object containing an action, along with an array of binding constraints
  */
-var chooseAction = function findActionThatSatisfiesQ(Q, actions, domain, B, objects) {
+var chooseAction = function findActionThatSatisfiesQ(Q, prevActionName, actions, domain, B, objects, orderingConstraints) {
     var allActions = actions.concat(domain);
     var _loop_2 = function (aAdd) {
         if (aAdd.hasOwnProperty("effect")) {
@@ -409,11 +366,11 @@ var chooseAction = function findActionThatSatisfiesQ(Q, actions, domain, B, obje
                         // TODO: If I'm going to always bind the variables before they hit the agenda,
                         // then I'm going to need to test which variables have been bound before they
                         // hit this function
+                        (0, exports.checkOrdConsistency)(aAdd, prevActionName, orderingConstraints);
                         var unifiers = (0, newMGU_1.newMGU)(Q, effect, B, objects);
                         var newBindingConstraints = unifiers.map(function (x) {
                             return (0, exports.createBindConstrFromUnifier)(x);
                         });
-                        debugger;
                         // is the action new??
                         var isNew_1 = void 0;
                         // TODO: I can't filter through all actions, because it contains actions from the domain
@@ -500,6 +457,7 @@ var getOppositeLiteral = function (lit) {
     return __assign(__assign({}, lit), { operation: opposite });
 };
 exports.getOppositeLiteral = getOppositeLiteral;
+// TODOJON: This should be in a utils folder/module
 var genReplaceMap = function replaceParameters(action, variableBindings, domainKeys) {
     var replaceMap = new Map();
     var trueBindings = Array.from(variableBindings, function (_a) {
@@ -698,12 +656,13 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
         // `aNeed` which is the action that's precondition is Q
         var q = (_a = agenda[0], _a.q), aAdd_1 = _a.aAdd;
         // removing the action that sourced q
-        // TODO: I don't know yet if this will be necessary, or if I should
-        // have other guards against this happening
+        // TODO: I don't know yet if this is necessary + checkOrdConsistency during
+        // chooseAction should also guard against this
         var filterActions = actions.filter(function (x) { return x.name !== aAdd_1; });
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
-        var action = (_b = (0, exports.chooseAction)(q, filterActions, domain, variableBindings, objects), _b.action), isNew_2 = _b.isNew, newBindingConstraints = _b.newBindingConstraints;
+        var action = (_b = (0, exports.chooseAction)(q, aAdd_1, filterActions, domain, variableBindings, objects, order), _b.action), isNew_2 = _b.isNew, newBindingConstraints = _b.newBindingConstraints;
+        debugger;
         // We mutate the original variableBindings, unlike all the other parts of the plan
         (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         var newName = void 0, aAddNewName = void 0;
@@ -714,13 +673,24 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
             domain = (0, exports.replaceAction)(domain, actionPrime);
             actions = actions.concat(aAddNewName);
             var newLink = (0, exports.createCausalLink)(aAddNewName.name, aAdd_1, q);
+            (0, exports.checkForNewLinkThreats)(actions, newLink, order);
             links = links.concat(newLink);
             order = (0, exports.updateOrderingConstraints)(aAddNewName, aAdd_1, isNew_2, order);
         }
         else {
+            // If the action name was prev partially undefined, we resolve the name throughout the plan
+            if (action.name.includes("undefined")) {
+                (0, nameResolution_1.resActionNameInPlan)(action, variableBindings, actions, order, links, agenda);
+            }
             var newLink = (0, exports.createCausalLink)(action.name, aAdd_1, q);
+            (0, exports.checkForNewLinkThreats)(actions, newLink, order);
             links = links.concat(newLink);
             order = (0, exports.updateOrderingConstraints)(action, aAdd_1, isNew_2, order);
+        }
+        // If the action tied to q was prev partially undefined, we resolve its name as well
+        if (aAdd_1.includes("undefined")) {
+            var qAction = actions.filter(function (x) { return x.name === aAdd_1; }).pop();
+            (0, nameResolution_1.resActionNameInPlan)(qAction, variableBindings, actions, order, links, agenda);
         }
         // 4. Update the goal set
         agenda = agenda.slice(1);
