@@ -7,20 +7,17 @@ import {
 } from "../types";
 import { createActionName, updateLiteral } from ".";
 
-// TODO: When resolving the action name after selecting it to satisfy q
-// we should also be resolving q, or the name of the action who's precondition
-// is being satisfied.
 /**
  * Updates the actions, ordering constraints, and causal links in the plan,
  * once an action can be bound to additional domain parameters.
  * */
-export const resActionNameInPlan = function resolveActionNameInPlan(
+const resActionNameInPlan = function resolveActionNameInPlan(
   action: Action,
   bindings: NewBindingMap,
   actions: Action[],
   order: OrderingConstraint[],
-  links: CausalLink[],
-  agenda: Agenda
+  links: CausalLink[]
+  // agenda: Agenda
 ) {
   const oldName = action.name;
   const newName = createActionName(action, bindings);
@@ -53,13 +50,26 @@ export const resActionNameInPlan = function resolveActionNameInPlan(
       orderCstr.tail = newName;
     }
   });
+};
 
-  // Replace any agenda items that have old action name
-  agenda.forEach((ai) => {
-    if (ai.aAdd === oldName) {
-      ai.aAdd = newName;
-
-      // TODO: Should I replace the bindings here too?
+export const resolvePlan = function resolveAllActionNamesInPlan(plan: {
+  actions: Action[];
+  order: OrderingConstraint[];
+  links: CausalLink[];
+  variableBindings: NewBindingMap;
+}) {
+  plan.actions.forEach((a) => {
+    if (a.name === "init" || a.name === "goal") {
+    } else {
+      resActionNameInPlan(
+        a,
+        plan.variableBindings,
+        plan.actions,
+        plan.order,
+        plan.links
+      );
     }
   });
 };
+
+export default resolvePlan;

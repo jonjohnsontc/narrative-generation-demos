@@ -11,16 +11,15 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 exports.__esModule = true;
-exports.resActionNameInPlan = void 0;
+exports.resolvePlan = void 0;
 var _1 = require(".");
-// TODO: When resolving the action name after selecting it to satisfy q
-// we should also be resolving q, or the name of the action who's precondition
-// is being satisfied.
 /**
  * Updates the actions, ordering constraints, and causal links in the plan,
  * once an action can be bound to additional domain parameters.
  * */
-var resActionNameInPlan = function resolveActionNameInPlan(action, bindings, actions, order, links, agenda) {
+var resActionNameInPlan = function resolveActionNameInPlan(action, bindings, actions, order, links
+// agenda: Agenda
+) {
     var oldName = action.name;
     var newName = (0, _1.createActionName)(action, bindings);
     // Replace action with clone of action that has new name
@@ -51,12 +50,15 @@ var resActionNameInPlan = function resolveActionNameInPlan(action, bindings, act
             orderCstr.tail = newName;
         }
     });
-    // Replace any agenda items that have old action name
-    agenda.forEach(function (ai) {
-        if (ai.aAdd === oldName) {
-            ai.aAdd = newName;
-            // TODO: Should I replace the bindings here too?
+};
+var resolvePlan = function resolveAllActionNamesInPlan(plan) {
+    plan.actions.forEach(function (a) {
+        if (a.name === "init" || a.name === "goal") {
+        }
+        else {
+            resActionNameInPlan(a, plan.variableBindings, plan.actions, plan.order, plan.links);
         }
     });
 };
-exports.resActionNameInPlan = resActionNameInPlan;
+exports.resolvePlan = resolvePlan;
+exports["default"] = exports.resolvePlan;

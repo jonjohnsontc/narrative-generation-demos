@@ -1,7 +1,8 @@
 // TODO: Seeing if this will work for bringing in the parser module
 import { newMGU } from "./newMGU";
 import { NewBindingMap } from "./types";
-import { resActionNameInPlan } from "./utils/nameResolution";
+// import { resActionNameInPlan } from "./utils/nameResolution";
+import resolvePlan from "./utils/nameResolution";
 import * as fs from "fs";
 
 // Type Declarations
@@ -744,6 +745,7 @@ export let POP = function PartialOrderPlan(
   // TODO: Changed to help debug since the agenda doesn't appear to be getting smaller
   if (agenda.length === 0) {
     console.log("Plan complete");
+    resolvePlan(plan);
     const bindingObj = Object.fromEntries(plan.variableBindings);
     plan.variableBindings = bindingObj;
     const serializedPlan = JSON.stringify(plan);
@@ -792,16 +794,9 @@ export let POP = function PartialOrderPlan(
       order = updateOrderingConstraints(aAddNewName, aAdd, isNew, order);
     } else {
       // If the action name was prev partially undefined, we resolve the name throughout the plan
-      if (action.name.includes("undefined")) {
-        resActionNameInPlan(
-          action,
-          variableBindings,
-          actions,
-          order,
-          links,
-          agenda
-        );
-      }
+      // if (action.name.includes("undefined")) {
+      //   resActionNameInPlan(action, variableBindings, actions, order, links);
+      // }
 
       let newLink = createCausalLink(action.name, aAdd, q);
       checkForNewLinkThreats(actions, newLink, order);
@@ -810,17 +805,10 @@ export let POP = function PartialOrderPlan(
     }
 
     // If the action tied to q was prev partially undefined, we resolve its name as well
-    if (aAdd.includes("undefined")) {
-      const qAction = actions.filter((x) => x.name === aAdd).pop();
-      resActionNameInPlan(
-        qAction,
-        variableBindings,
-        actions,
-        order,
-        links,
-        agenda
-      );
-    }
+    // if (aAdd.includes("undefined")) {
+    //   const qAction = actions.filter((x) => x.name === aAdd).pop();
+    //   resActionNameInPlan(qAction, variableBindings, actions, order, links);
+    // }
 
     // 4. Update the goal set
     agenda = agenda.slice(1);
