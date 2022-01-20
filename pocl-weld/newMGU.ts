@@ -19,14 +19,30 @@ export const newMGU = function newFindMostGenerialUnifier(
   variableBindings: NewBindingMap,
   objects: ActionParam[]
 ): Map<string, string>[] {
+  
   const functionizeBindings = (
-    bindings: Array<VariableBinding | undefined>
+    bindings: Array<VariableBinding | undefined>,
+    varBindings: NewBindingMap
   ): Function[] => {
     const funcs = [];
+    // We test to see if the bindingConstraint is there, or if it's undefined
+    // it will be undefined if there are no binding constraints for a param
     if (bindings) {
       for (const binding of bindings) {
-        // We test to see if the bindingConstraint is there, or if it's undefined
-        // it will be undefined if there are no binding constraints for a param
+        const assigneeResults = varBindings.get(binding.assignee)
+        if (assigneeResults) {
+          const trueBindings = assigneeResults.filter(x => x.equal === true);
+          if (trueBindings.length > 0) {
+            // There should only be one true binding
+            const trueBinding = trueBindings.pop().assignee;
+            if (binding.equal) {
+              funcs.push((param) => param === trueBinding);
+            } else {
+              funcs.push((param) => param !== trueBinding);
+            }            
+          }
+        }
+
         if (binding.equal) {
           funcs.push((param) => param === binding.assignee);
         } else {
@@ -76,8 +92,8 @@ export const newMGU = function newFindMostGenerialUnifier(
     boundRParams.push(variableBindings.get(R.parameters[i]));
   }
 
-  const qFuncs = boundQParams.map((x) => functionizeBindings(x));
-  const rFuncs = boundRParams.map((x) => functionizeBindings(x));
+  const qFuncs = boundQParams.map((x) => functionizeBindings(x, variableBindings));
+  const rFuncs = boundRParams.map((x) => functionizeBindings(x, variableBindings));
 
   const combinedFuncBindings = [];
   for (let i = 0; i < Q.parameters.length; i++) {

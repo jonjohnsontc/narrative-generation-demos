@@ -1,7 +1,6 @@
 // TODO: Seeing if this will work for bringing in the parser module
 import { newMGU } from "./newMGU";
 import { NewBindingMap } from "./types";
-// import { resActionNameInPlan } from "./utils/nameResolution";
 import resolvePlan from "./utils/nameResolution";
 import * as fs from "fs";
 
@@ -793,22 +792,11 @@ export let POP = function PartialOrderPlan(
       links = links.concat(newLink);
       order = updateOrderingConstraints(aAddNewName, aAdd, isNew, order);
     } else {
-      // If the action name was prev partially undefined, we resolve the name throughout the plan
-      // if (action.name.includes("undefined")) {
-      //   resActionNameInPlan(action, variableBindings, actions, order, links);
-      // }
-
       let newLink = createCausalLink(action.name, aAdd, q);
       checkForNewLinkThreats(actions, newLink, order);
       links = links.concat(newLink);
       order = updateOrderingConstraints(action, aAdd, isNew, order);
     }
-
-    // If the action tied to q was prev partially undefined, we resolve its name as well
-    // if (aAdd.includes("undefined")) {
-    //   const qAction = actions.filter((x) => x.name === aAdd).pop();
-    //   resActionNameInPlan(qAction, variableBindings, actions, order, links);
-    // }
 
     // 4. Update the goal set
     agenda = agenda.slice(1);

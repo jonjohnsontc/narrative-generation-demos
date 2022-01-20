@@ -15,27 +15,22 @@ var orderingConstraints = [{ name: "init", tail: "goal" }];
 var causalLinks = [];
 var agenda = [];
 for (var _i = 0, _a = actions[1].precondition; _i < _a.length; _i++) {
-  var precond = _a[_i];
-  agenda.push({
-    q: precond,
-    aAdd: "goal",
-  });
+    var precond = _a[_i];
+    agenda.push({
+        q: precond,
+        aAdd: "goal"
+    });
 }
 var variableBindings = new Map([
-  ["A", [{ equal: true, assignor: "A", assignee: "A" }]],
-  ["B", [{ equal: true, assignor: "B", assignee: "B" }]],
-  ["C", [{ equal: true, assignor: "C", assignee: "C" }]],
-  ["table", [{ equal: true, assignor: "table", assignee: "table" }]],
+    ["A", [{ equal: true, assignor: "A", assignee: "A" }]],
+    ["B", [{ equal: true, assignor: "B", assignee: "B" }]],
+    ["C", [{ equal: true, assignor: "C", assignee: "C" }]],
+    ["table", [{ equal: true, assignor: "table", assignee: "table" }]],
 ]);
 debugger;
-exports.result = (0, pocl_weld_1.POP)(
-  {
+exports.result = (0, pocl_weld_1.POP)({
     actions: actions,
     order: orderingConstraints,
     links: causalLinks,
-    variableBindings: variableBindings,
-  },
-  agenda,
-  domain,
-  objects
-);
+    variableBindings: variableBindings
+}, agenda, domain, objects);

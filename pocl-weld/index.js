@@ -14,7 +14,6 @@ exports.__esModule = true;
 exports.POP = exports.updateCausalLinks = exports.createCausalLink = exports.checkForThreats = exports.condAddConstraints = exports.genReplaceMap = exports.getOppositeLiteral = exports.updateOrderingConstraints = exports.chooseAction = exports.checkOrdConsistency = exports.isNew = exports.updateBindingConstraints = exports.checkBindings = exports.updateAgendaAndConstraints = exports.pushToAgenda = exports.createBindConstrFromUnifier = exports.createBindingConstraint = exports.pairMatch = exports.NoUnifierException = exports.replaceAction = exports.updateAction = exports.checkForNewLinkThreats = exports.createActionName = exports.isLiteralEqual = exports.zip = void 0;
 // TODO: Seeing if this will work for bringing in the parser module
 var newMGU_1 = require("./newMGU");
-// import { resActionNameInPlan } from "./utils/nameResolution";
 var nameResolution_1 = require("./utils/nameResolution");
 var fs = require("fs");
 // I have this in cpopl/script.js as well
@@ -680,20 +679,11 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
             order = (0, exports.updateOrderingConstraints)(aAddNewName, aAdd_1, isNew_2, order);
         }
         else {
-            // If the action name was prev partially undefined, we resolve the name throughout the plan
-            // if (action.name.includes("undefined")) {
-            //   resActionNameInPlan(action, variableBindings, actions, order, links);
-            // }
             var newLink = (0, exports.createCausalLink)(action.name, aAdd_1, q);
             (0, exports.checkForNewLinkThreats)(actions, newLink, order);
             links = links.concat(newLink);
             order = (0, exports.updateOrderingConstraints)(action, aAdd_1, isNew_2, order);
         }
-        // If the action tied to q was prev partially undefined, we resolve its name as well
-        // if (aAdd.includes("undefined")) {
-        //   const qAction = actions.filter((x) => x.name === aAdd).pop();
-        //   resActionNameInPlan(qAction, variableBindings, actions, order, links);
-        // }
         // 4. Update the goal set
         agenda = agenda.slice(1);
         // This can potentially mutate both agendaPrime and variableBindings

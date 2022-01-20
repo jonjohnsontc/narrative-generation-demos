@@ -8,12 +8,26 @@ var permutations_1 = require("../shared-libs/permutations");
 // Right now, this incorporates the idea of "objects", which I sourced from Kory Becker's strips.js
 // In my study of Weld's POCL so far, there isn't a concept like this
 var newMGU = function newFindMostGenerialUnifier(Q, R, variableBindings, objects) {
-    var functionizeBindings = function (bindings) {
+    var functionizeBindings = function (bindings, varBindings) {
         var funcs = [];
+        // We test to see if the bindingConstraint is there, or if it's undefined
+        // it will be undefined if there are no binding constraints for a param
         if (bindings) {
             var _loop_1 = function (binding) {
-                // We test to see if the bindingConstraint is there, or if it's undefined
-                // it will be undefined if there are no binding constraints for a param
+                var assigneeResults = varBindings.get(binding.assignee);
+                if (assigneeResults) {
+                    var trueBindings = assigneeResults.filter(function (x) { return x.equal === true; });
+                    if (trueBindings.length > 0) {
+                        // There should only be one true binding
+                        var trueBinding_1 = trueBindings.pop().assignee;
+                        if (binding.equal) {
+                            funcs.push(function (param) { return param === trueBinding_1; });
+                        }
+                        else {
+                            funcs.push(function (param) { return param !== trueBinding_1; });
+                        }
+                    }
+                }
                 if (binding.equal) {
                     funcs.push(function (param) { return param === binding.assignee; });
                 }
@@ -61,8 +75,8 @@ var newMGU = function newFindMostGenerialUnifier(Q, R, variableBindings, objects
         boundQParams.push(variableBindings.get(Q.parameters[i]));
         boundRParams.push(variableBindings.get(R.parameters[i]));
     }
-    var qFuncs = boundQParams.map(function (x) { return functionizeBindings(x); });
-    var rFuncs = boundRParams.map(function (x) { return functionizeBindings(x); });
+    var qFuncs = boundQParams.map(function (x) { return functionizeBindings(x, variableBindings); });
+    var rFuncs = boundRParams.map(function (x) { return functionizeBindings(x, variableBindings); });
     var combinedFuncBindings = [];
     for (var i = 0; i < Q.parameters.length; i++) {
         combinedFuncBindings.push(qFuncs[i].concat(rFuncs[i]));
