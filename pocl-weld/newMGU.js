@@ -17,7 +17,7 @@ var newMGU = function newFindMostGenerialUnifier(Q, R, variableBindings, objects
                 var assigneeResults = varBindings.get(binding.assignee);
                 if (assigneeResults) {
                     var trueBindings = assigneeResults.filter(function (x) { return x.equal === true; });
-                    if (trueBindings.length > 0) {
+                    if (trueBindings.length === 1) {
                         // There should only be one true binding
                         var trueBinding_1 = trueBindings.pop().assignee;
                         if (binding.equal) {
@@ -26,6 +26,10 @@ var newMGU = function newFindMostGenerialUnifier(Q, R, variableBindings, objects
                         else {
                             funcs.push(function (param) { return param !== trueBinding_1; });
                         }
+                    }
+                    else {
+                        // TODO: I should probably remove this at some point
+                        throw Error("What the fuck?! More than one true");
                     }
                 }
                 if (binding.equal) {

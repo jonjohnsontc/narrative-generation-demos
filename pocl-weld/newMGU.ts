@@ -32,7 +32,7 @@ export const newMGU = function newFindMostGenerialUnifier(
         const assigneeResults = varBindings.get(binding.assignee)
         if (assigneeResults) {
           const trueBindings = assigneeResults.filter(x => x.equal === true);
-          if (trueBindings.length > 0) {
+          if (trueBindings.length === 1) {
             // There should only be one true binding
             const trueBinding = trueBindings.pop().assignee;
             if (binding.equal) {
@@ -40,6 +40,9 @@ export const newMGU = function newFindMostGenerialUnifier(
             } else {
               funcs.push((param) => param !== trueBinding);
             }            
+          } else {
+            // TODO: I should probably remove this at some point
+            throw Error("What the fuck?! More than one true")
           }
         }
 

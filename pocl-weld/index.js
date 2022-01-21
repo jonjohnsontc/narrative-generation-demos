@@ -641,6 +641,7 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
     // TODO: Changed to help debug since the agenda doesn't appear to be getting smaller
     if (agenda.length === 0) {
         console.log("Plan complete");
+        debugger;
         (0, nameResolution_1["default"])(plan);
         var bindingObj = Object.fromEntries(plan.variableBindings);
         plan.variableBindings = bindingObj;
@@ -663,7 +664,6 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
         // 3. Action selection
         // TODO: Where do I get domain from? Haven't come across a place in Weld
         var action = (_b = (0, exports.chooseAction)(q, aAdd_1, filterActions, domain, variableBindings, objects, order), _b.action), isNew_2 = _b.isNew, newBindingConstraints = _b.newBindingConstraints;
-        debugger;
         // We mutate the original variableBindings, unlike all the other parts of the plan
         (0, exports.updateBindingConstraints)(variableBindings, newBindingConstraints);
         var newName = void 0, aAddNewName = void 0;

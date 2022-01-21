@@ -744,6 +744,7 @@ export let POP = function PartialOrderPlan(
   // TODO: Changed to help debug since the agenda doesn't appear to be getting smaller
   if (agenda.length === 0) {
     console.log("Plan complete");
+    debugger;
     resolvePlan(plan);
     const bindingObj = Object.fromEntries(plan.variableBindings);
     plan.variableBindings = bindingObj;
@@ -776,7 +777,6 @@ export let POP = function PartialOrderPlan(
       objects,
       order
     );
-    debugger;
     // We mutate the original variableBindings, unlike all the other parts of the plan
     updateBindingConstraints(variableBindings, newBindingConstraints);
 

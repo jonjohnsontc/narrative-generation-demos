@@ -46,7 +46,8 @@ var resActionNameInPlan = function resolveActionNameInPlan(action, bindings, act
         if (orderCstr.name === oldName) {
             orderCstr.name = newName;
         }
-        else if (orderCstr.tail === oldName) {
+        // This should be an else if, but I'm trying to surface some errors
+        if (orderCstr.tail === oldName) {
             orderCstr.tail = newName;
         }
     });
