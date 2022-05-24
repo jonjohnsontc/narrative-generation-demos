@@ -529,7 +529,7 @@ var condAddConstraints = function (link, action, ordConstr) {
 };
 exports.condAddConstraints = condAddConstraints;
 /**
- * Checks for potential threats to the array of casual links based on the action chosen. If a threat exists,
+ * Checks for potential threats to the array of causal links based on the action chosen. If a threat exists,
  * a new ordering constraint should be created to mitigate.
  *
  * @param action

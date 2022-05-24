@@ -46,7 +46,7 @@ const resActionNameInPlan = function resolveActionNameInPlan(
   order.forEach((orderCstr) => {
     if (orderCstr.name === oldName) {
       orderCstr.name = newName;
-    } 
+    }
     // This should be an else if, but I'm trying to surface some errors
     if (orderCstr.tail === oldName) {
       orderCstr.tail = newName;

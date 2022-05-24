@@ -1,16 +1,9 @@
-import { Literal, BindingMap, VariableBinding, ActionParam } from "./index";
+import { Literal, NewBindingMap, VariableBinding, ActionParam } from "./types";
 import { shuffleArray } from "../shared-libs/random";
 import { kCombinations } from "../shared-libs/combinations";
 import { permute } from "../shared-libs/permutations";
 
-// I think this new binding map will make it easier to quickly pull constraints for any
-// consonant passed. Any given param, domain or action will be housed here. Domain params
-// will just map to a binding equal to itself.
-// TODO: I still need to figure out whether params will be cloned & reversed, so that there's
-// a copy of the binding for each parameter involved
-export type NewBindingMap = Map<string, VariableBinding[]>;
-
-// My attempt at a better MGU if I startepile from scratch
+// My attempt at a better MGU if I start from scratch
 // Right now, this incorporates the idea of "objects", which I sourced from Kory Becker's strips.js
 // In my study of Weld's POCL so far, there isn't a concept like this
 export const newMGU = function newFindMostGenerialUnifier(
@@ -19,7 +12,6 @@ export const newMGU = function newFindMostGenerialUnifier(
   variableBindings: NewBindingMap,
   objects: ActionParam[]
 ): Map<string, string>[] {
-  
   const functionizeBindings = (
     bindings: Array<VariableBinding | undefined>,
     varBindings: NewBindingMap
@@ -29,9 +21,9 @@ export const newMGU = function newFindMostGenerialUnifier(
     // it will be undefined if there are no binding constraints for a param
     if (bindings) {
       for (const binding of bindings) {
-        const assigneeResults = varBindings.get(binding.assignee)
+        const assigneeResults = varBindings.get(binding.assignee);
         if (assigneeResults) {
-          const trueBindings = assigneeResults.filter(x => x.equal === true);
+          const trueBindings = assigneeResults.filter((x) => x.equal === true);
           if (trueBindings.length === 1) {
             // There should only be one true binding
             const trueBinding = trueBindings.pop().assignee;
@@ -39,10 +31,10 @@ export const newMGU = function newFindMostGenerialUnifier(
               funcs.push((param) => param === trueBinding);
             } else {
               funcs.push((param) => param !== trueBinding);
-            }            
+            }
           } else {
             // TODO: I should probably remove this at some point
-            throw Error("What the fuck?! More than one true")
+            throw Error("What the fuck?! More than one true");
           }
         }
 
@@ -95,8 +87,12 @@ export const newMGU = function newFindMostGenerialUnifier(
     boundRParams.push(variableBindings.get(R.parameters[i]));
   }
 
-  const qFuncs = boundQParams.map((x) => functionizeBindings(x, variableBindings));
-  const rFuncs = boundRParams.map((x) => functionizeBindings(x, variableBindings));
+  const qFuncs = boundQParams.map((x) =>
+    functionizeBindings(x, variableBindings)
+  );
+  const rFuncs = boundRParams.map((x) =>
+    functionizeBindings(x, variableBindings)
+  );
 
   const combinedFuncBindings = [];
   for (let i = 0; i < Q.parameters.length; i++) {
