@@ -61,8 +61,8 @@ export default function App() {
       </div>
       <CommandBar
         refreshOnClick={refreshPlan}
-        playOnClick={"hi"}
-        skipEndOnClick={"hello"}
+        playOnClick={playPlan}
+        skipEndOnClick={skipEndPlan}
       />
     </>
   );

@@ -3,7 +3,7 @@ import * as React from "react";
 export function CommandBar() {
   return (
     <footer className="footer">
-      <button>
+      <button className="cmd-btn">
         <svg
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -12,7 +12,7 @@ export function CommandBar() {
           <use xlinkHref="./plan-viewer/public/bootstrap-icons.svg#arrow-clockwise" />
         </svg>
       </button>
-      <button>
+      <button className="cmd-btn">
         <svg
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -21,7 +21,7 @@ export function CommandBar() {
           <use xlinkHref="./plan-viewer/public/bootstrap-icons.svg#play-fill" />
         </svg>
       </button>
-      <button>
+      <button className="cmd-btn">
         <svg
           fill="none"
           xmlns="http://www.w3.org/2000/svg"

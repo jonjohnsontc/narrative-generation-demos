@@ -68,6 +68,7 @@ h6 {
 
 body {
   --blue: #5db2ff;
+  --green: #1f8a3f;
   --purple: #d35fff;
   --dark-purple: #5e48e8;
   --grey: #717171;
@@ -93,11 +94,15 @@ body {
 
 .footer {
   border-top: 0.2em solid var(--dark-purple);
-  background-color: slategrey;
+  background-color: hsl(0, 8%, 95%);
   box-shadow: 0px 6px 10px 4px rgba(0, 0, 0, 0.15);
   filter: drop-shadow(0px 2px 3px rgba(0, 0, 0, 0.3));
   display: flex;
   justify-content: space-between;
+}
+
+.cmd-btn {
+  background-color: transparent;
 }
 
 .icon {
@@ -110,4 +115,14 @@ body {
 .refresh {
   stroke: var(--purple);
   fill: var(--purple);
+}
+
+.play {
+  stroke: var(--green);
+  fill: var(--green);
+}
+
+.skip-end {
+  stroke: var(--dark-purple);
+  fill: var(--dark-purple);
 }
