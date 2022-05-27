@@ -10,12 +10,28 @@ const addy = "http://localhost:8084/";
  * */
 export default function App() {
   const [plan, setPlan] = React.useState(null);
-  const loadPlan = () =>
+  const refreshPlan = () =>
     React.useEffect(() => {
       fetch(addy)
         .then((res) => res.json())
         .then((results) => setPlan(results));
     });
+
+  const playPlan = () => {
+    React.useEffect(() => {
+      fetch(addy + "play")
+        .then((res) => res.json())
+        .then((results) => setPlan(results));
+    });
+  };
+
+  const skipEndPlan = () => {
+    React.useEffect(() => {
+      fetch(addy + "skip-end")
+        .then((res) => res.json())
+        .then((results) => setPlan(results));
+    });
+  };
 
   const actionsToUse = ["Init", "Move A from Table to B", "Goal"];
 
@@ -43,7 +59,11 @@ export default function App() {
           <h1>Status</h1>
         </header>
       </div>
-      <CommandBar />
+      <CommandBar
+        refreshOnClick={refreshPlan}
+        playOnClick={"hi"}
+        skipEndOnClick={"hello"}
+      />
     </>
   );
 }

@@ -30,6 +30,7 @@ app.get("/", (req, res) => {
     agenda: agenda,
     variableBindings: Array.from(variableBindings),
   };
+  res.append("Access-Control-Allow-Origin", "*");
   res.json(allObjects);
 });
 
@@ -50,7 +51,7 @@ app.post("/play", (req, res) => {
     curState.objects,
     false
   );
-
+  res.append("Access-Control-Allow-Origin", "*");
   res.json(newState);
 });
 

@@ -7,16 +7,28 @@ export function CommandBar() {
         <svg
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="refresh-button"
+          className="refresh icon"
         >
-          <use xlinkHref="./plan-viewer/public/bootstrap-icons.svg#arrow-clockwise" />{" "}
+          <use xlinkHref="./plan-viewer/public/bootstrap-icons.svg#arrow-clockwise" />
         </svg>
       </button>
       <button>
-        <svg></svg>
+        <svg
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="play icon"
+        >
+          <use xlinkHref="./plan-viewer/public/bootstrap-icons.svg#play-fill" />
+        </svg>
       </button>
       <button>
-        <svg></svg>
+        <svg
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="skip-end icon"
+        >
+          <use xlinkHref="./plan-viewer/public/bootstrap-icons.svg#skip-end-fill" />
+        </svg>
       </button>
     </footer>
   );
