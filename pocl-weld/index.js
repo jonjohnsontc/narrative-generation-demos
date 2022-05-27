@@ -631,7 +631,7 @@ exports.updateCausalLinks = updateCausalLinks;
  * @param agenda
  * @returns  A complete ordered plan
  */
-var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
+var POP = function PartialOrderPlan(plan, agenda, domain, objects, recur) {
     // We need to ensure that initial state contains no variable bindings, and all variables mentioned
     // in the effects of an operator be included in the preconditions of an operator.
     // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
@@ -692,13 +692,24 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects) {
         }
         // 5. causal link protection
         order = (0, exports.checkForThreats)(action, order, links, variableBindings, isNew_2);
+        if (!recur) {
+            return {
+                actions: actions,
+                order: order,
+                links: links,
+                variableBindings: variableBindings,
+                agenda: agenda,
+                domain: domain,
+                objects: objects
+            };
+        }
         // 6. recursive invocation
         (0, exports.POP)({
             actions: actions,
             order: order,
             links: links,
             variableBindings: variableBindings
-        }, agenda, domain, objects);
+        }, agenda, domain, objects, true);
     }
 };
 exports.POP = POP;

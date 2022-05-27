@@ -733,7 +733,8 @@ export let POP = function PartialOrderPlan(
   },
   agenda: Agenda,
   domain: Action[],
-  objects: ActionParam[]
+  objects: ActionParam[],
+  recur: boolean
 ) {
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
@@ -814,6 +815,17 @@ export let POP = function PartialOrderPlan(
     // 5. causal link protection
     order = checkForThreats(action, order, links, variableBindings, isNew);
 
+    if (!recur) {
+      return {
+        actions: actions,
+        order: order,
+        links: links,
+        variableBindings: variableBindings,
+        agenda: agenda,
+        domain: domain,
+        objects: objects,
+      };
+    }
     // 6. recursive invocation
     POP(
       {
@@ -824,7 +836,8 @@ export let POP = function PartialOrderPlan(
       },
       agenda,
       domain,
-      objects
+      objects,
+      true
     );
   }
 };

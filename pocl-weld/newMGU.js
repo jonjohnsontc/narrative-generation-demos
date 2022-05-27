@@ -4,7 +4,7 @@ exports.newMGU = void 0;
 var random_1 = require("../shared-libs/random");
 var combinations_1 = require("../shared-libs/combinations");
 var permutations_1 = require("../shared-libs/permutations");
-// My attempt at a better MGU if I startepile from scratch
+// My attempt at a better MGU if I start from scratch
 // Right now, this incorporates the idea of "objects", which I sourced from Kory Becker's strips.js
 // In my study of Weld's POCL so far, there isn't a concept like this
 var newMGU = function newFindMostGenerialUnifier(Q, R, variableBindings, objects) {
@@ -79,8 +79,12 @@ var newMGU = function newFindMostGenerialUnifier(Q, R, variableBindings, objects
         boundQParams.push(variableBindings.get(Q.parameters[i]));
         boundRParams.push(variableBindings.get(R.parameters[i]));
     }
-    var qFuncs = boundQParams.map(function (x) { return functionizeBindings(x, variableBindings); });
-    var rFuncs = boundRParams.map(function (x) { return functionizeBindings(x, variableBindings); });
+    var qFuncs = boundQParams.map(function (x) {
+        return functionizeBindings(x, variableBindings);
+    });
+    var rFuncs = boundRParams.map(function (x) {
+        return functionizeBindings(x, variableBindings);
+    });
     var combinedFuncBindings = [];
     for (var i = 0; i < Q.parameters.length; i++) {
         combinedFuncBindings.push(qFuncs[i].concat(rFuncs[i]));

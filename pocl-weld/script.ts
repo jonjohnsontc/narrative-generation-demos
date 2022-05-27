@@ -36,5 +36,8 @@ export const result = POP(
   },
   agenda,
   domain,
-  objects
+  objects,
+  false
 );
+
+export { objects, domain, orderingConstraints, agenda, variableBindings };

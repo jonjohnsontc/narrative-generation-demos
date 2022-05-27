@@ -1,6 +1,12 @@
 "use strict";
 exports.__esModule = true;
-exports.result = void 0;
+exports.variableBindings =
+  exports.agenda =
+  exports.orderingConstraints =
+  exports.domain =
+  exports.objects =
+  exports.result =
+    void 0;
 var parser_cjs_1 = require("/Users/jonjohnson/dev/narrative-generation/shared-libs/parser/parser.cjs");
 var pocl_weld_1 = require("../pocl-weld");
 var p = parser_cjs_1;
@@ -10,10 +16,14 @@ actions[0].effect = actions[0].actions;
 // goal action needs to have "precondition" property
 actions[1].precondition = actions[1].actions;
 var objects = p.weldProblem.objects;
+exports.objects = objects;
 var domain = p.weldDomain.actions;
+exports.domain = domain;
 var orderingConstraints = [{ name: "init", tail: "goal" }];
+exports.orderingConstraints = orderingConstraints;
 var causalLinks = [];
 var agenda = [];
+exports.agenda = agenda;
 for (var _i = 0, _a = actions[1].precondition; _i < _a.length; _i++) {
   var precond = _a[_i];
   agenda.push({
@@ -27,6 +37,7 @@ var variableBindings = new Map([
   ["C", [{ equal: true, assignor: "C", assignee: "C" }]],
   ["table", [{ equal: true, assignor: "table", assignee: "table" }]],
 ]);
+exports.variableBindings = variableBindings;
 debugger;
 exports.result = (0, pocl_weld_1.POP)(
   {
@@ -37,5 +48,6 @@ exports.result = (0, pocl_weld_1.POP)(
   },
   agenda,
   domain,
-  objects
+  objects,
+  false
 );
