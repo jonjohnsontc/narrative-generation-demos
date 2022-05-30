@@ -1,16 +1,14 @@
-import parsed from "/Users/jonjohnson/dev/narrative-generation/shared-libs/parser/parser.cjs";
+import { weldDomain, weldProblem } from "../shared-libs/parser/parser";
 import { POP, Agenda } from "../pocl-weld";
 
-const p = parsed;
-
-const actions = p.weldProblem.states;
+const actions = weldProblem.states;
 // init action needs to have effect property
 actions[0].effect = actions[0].actions;
 // goal action needs to have "precondition" property
 actions[1].precondition = actions[1].actions;
 
-const objects = p.weldProblem.objects;
-const domain = p.weldDomain.actions;
+const objects = weldProblem.objects;
+const domain = weldDomain.actions;
 const orderingConstraints = [{ name: "init", tail: "goal" }];
 const causalLinks = [];
 const agenda: Agenda = [];
@@ -40,4 +38,11 @@ export const result = POP(
   false
 );
 
-export { objects, domain, orderingConstraints, agenda, variableBindings };
+export {
+  actions,
+  objects,
+  domain,
+  orderingConstraints,
+  agenda,
+  variableBindings,
+};

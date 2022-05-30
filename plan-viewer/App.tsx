@@ -1,6 +1,8 @@
 import * as React from "react";
 
 import { Actions } from "./components/Actions";
+import { CausalLinks } from "./components/CausalLinks";
+import { VarBindings } from "./components/VarBindings";
 import { CommandBar } from "./components/CommandBar";
 
 const addy = "http://localhost:8084/";
@@ -10,30 +12,36 @@ const addy = "http://localhost:8084/";
  * */
 export default function App() {
   const [plan, setPlan] = React.useState(null);
-  const refreshPlan = () =>
-    React.useEffect(() => {
-      fetch(addy)
-        .then((res) => res.json())
-        .then((results) => setPlan(results));
-    });
-
-  const playPlan = () => {
-    React.useEffect(() => {
-      fetch(addy + "play")
-        .then((res) => res.json())
-        .then((results) => setPlan(results));
-    });
+  const refreshPlan = (e: Event) => {
+    e.preventDefault();
+    fetch(addy)
+      .then((res) => res.json())
+      .then((results) => setPlan(results));
   };
 
-  const skipEndPlan = () => {
-    React.useEffect(() => {
-      fetch(addy + "skip-end")
-        .then((res) => res.json())
-        .then((results) => setPlan(results));
-    });
+  const playPlan = (e: Event) => {
+    e.preventDefault();
+    fetch(addy + "play", { method: "POST" })
+      .then((res) => res.json())
+      .then((results) => setPlan(results));
   };
 
-  const actionsToUse = ["Init", "Move A from Table to B", "Goal"];
+  const skipEndPlan = (e: Event) => {
+    e.preventDefault();
+    fetch(addy + "skip-end", { method: "POST" })
+      .then((res) => res.json())
+      .then((results) => setPlan(results));
+  };
+
+  const [content, setContent] = React.useState(null);
+  const emptyLink = [{ createdBy: "", consumedBy: "", preposition: "" }];
+  const emptyAction = [{ name: "" }];
+  const emptyBindings = [["", [{ equal: true, assignor: "", assignee: "" }]]];
+  React.useEffect(() => {
+    if (plan) {
+      setContent({ links: emptyLink, ...plan });
+    }
+  }, [plan]);
 
   return (
     <>
@@ -42,17 +50,21 @@ export default function App() {
         <header className="header">
           <h1>Causal Links</h1>
         </header>
+        <CausalLinks links={content ? content.links : emptyLink} />
       </div>
       <div className="c2">
         <header className="header">
           <h1>Variable Bindings</h1>
         </header>
+        <VarBindings
+          bindings={content ? content.variableBindings : emptyBindings}
+        />
       </div>
       <div className="c3">
         <header className="header">
           <h1>Actions</h1>
         </header>
-        <Actions actions={actionsToUse}></Actions>
+        <Actions actions={content ? content.actions : emptyAction}></Actions>
       </div>
       <div className="c4">
         <header className="header">

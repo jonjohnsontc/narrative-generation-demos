@@ -9,6 +9,7 @@
 */
 @import url("https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@800&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Fira+Sans:wght@700&display=swap");
+@import "./theme.css";
 
 html {
   box-sizing: border-box;
@@ -67,36 +68,31 @@ h6 {
 */
 
 body {
-  --blue: #5db2ff;
-  --green: #1f8a3f;
-  --purple: #d35fff;
-  --dark-purple: #5e48e8;
-  --grey: #717171;
-  --light-grey: rgb(248, 249, 250);
+  background-color: var(--background);
 }
 
 .plan-header {
-  color: var(--blue);
+  color: var(--primary);
   font-size: 2em;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  border-bottom: 0.4em solid var(--blue);
+  border-bottom: 0.4em solid var(--primary);
 }
 
-.actions-panel {
+.panel {
   border-radius: 25px;
-  background-color: hsl(0, 3%, 70%);
+  background-color: var(--surface-variant);
   font-size: 3em;
 }
 
-.actions-panel > ul {
+.panel > ul {
   list-style: none;
 }
 
 .footer {
-  border-top: 0.2em solid var(--dark-purple);
-  background-color: hsl(0, 8%, 95%);
-  box-shadow: 0px 6px 10px 4px rgba(0, 0, 0, 0.15);
-  filter: drop-shadow(0px 2px 3px rgba(0, 0, 0, 0.3));
+  background-color: var(--secondary-container);
+  box-shadow: 0px 4px 8px 3px rgba(0, 0, 0, 0.15),
+    0px 1px 3px rgba(0, 0, 0, 0.3);
+  border-radius: 16px;
   display: flex;
   justify-content: space-between;
 }
@@ -106,23 +102,23 @@ body {
 }
 
 .icon {
-  stroke: black;
-  fill: black;
+  stroke: var(--primary);
+  fill: var(--primary);
   height: 8em;
   width: 8em;
 }
 
 .refresh {
-  stroke: var(--purple);
-  fill: var(--purple);
+  stroke: var(--bonus-12);
+  fill: var(--bonus-12);
 }
 
 .play {
-  stroke: var(--green);
-  fill: var(--green);
+  stroke: var(--primary);
+  fill: var(--primary);
 }
 
 .skip-end {
-  stroke: var(--dark-purple);
-  fill: var(--dark-purple);
+  stroke: var(--tertiary);
+  fill: var(--tertiary);
 }

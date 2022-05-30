@@ -40,5 +40,12 @@
     "back": "nodemon plan-viewer/server.ts",
     "test": "jest",
     "inspect": "node inspect pocl-weld/script.js"
+  },
+  "main": "./shared-libs/parser/parser.cjs",
+  "types": "index.d.ts",
+  "compilerOptions": {
+    "typeRoots": [
+      "./shared-libs/types"
+    ]
   }
 }

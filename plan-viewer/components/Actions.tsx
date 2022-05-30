@@ -1,8 +1,10 @@
 import * as React from "react";
 
+import type { Action } from "../../pocl-weld/types";
+
 type Props = {
   // each action's name, should be pre-sorted
-  actions: string[];
+  actions: Action[];
 };
 
 /**
@@ -10,12 +12,12 @@ type Props = {
  * */
 export function Actions({ actions }: Props) {
   return (
-    <div className="actions-panel">
+    <div className="panel">
       <ul>
-        {actions.map((name) => {
+        {actions.map((action) => {
           return (
-            <li key={name} className="action-listing">
-              {name}
+            <li key={action.name} className="action-listing">
+              {action.name}
             </li>
           );
         })}
