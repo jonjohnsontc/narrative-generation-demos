@@ -2,7 +2,7 @@
   height: 100vh;
   width: 100vw;
   display: grid;
-  gap: 2%;
+  gap: 3%;
   grid-template:
     "a a a" 5em
     "b e f" 3fr
@@ -16,25 +16,27 @@
 
 .c1 {
   grid-area: b;
+  margin-left: 3em;
 }
 
 .c2 {
   grid-area: c;
+  margin-left: 3em;
 }
 
 .c3 {
   grid-area: e;
-  display: flex;
-  flex-direction: column;
 }
 
 .panel {
-  flex: auto;
-  height: 90%;
+  height: 87.5%;
+  min-width: 33rem;
+  overflow: scroll;
 }
 
 .c4 {
   grid-area: f;
+  margin-right: 3em;
 }
 
 .footer {

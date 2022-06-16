@@ -3,6 +3,7 @@ import { newMGU } from "./newMGU";
 import { NewBindingMap } from "./types";
 import resolvePlan from "./utils/nameResolution";
 import * as fs from "fs";
+import { POPParts } from "../shared-libs/types";
 
 // Type Declarations
 export type VariableBinding = {
@@ -735,7 +736,7 @@ export let POP = function PartialOrderPlan(
   domain: Action[],
   objects: ActionParam[],
   recur: boolean
-) {
+): any {
   // We need to ensure that initial state contains no variable bindings, and all variables mentioned
   // in the effects of an operator be included in the preconditions of an operator.
   // - Turns out that this is baked into the sussman anamoly, and likely any other problem - It's a check that I could
@@ -825,19 +826,20 @@ export let POP = function PartialOrderPlan(
         domain: domain,
         objects: objects,
       };
+    } else {
+      // 6. recursive invocation
+      POP(
+        {
+          actions: actions,
+          order: order,
+          links: links,
+          variableBindings: variableBindings,
+        },
+        agenda,
+        domain,
+        objects,
+        true
+      );
     }
-    // 6. recursive invocation
-    POP(
-      {
-        actions: actions,
-        order: order,
-        links: links,
-        variableBindings: variableBindings,
-      },
-      agenda,
-      domain,
-      objects,
-      true
-    );
   }
 };

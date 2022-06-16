@@ -4,6 +4,7 @@ import { Actions } from "./components/Actions";
 import { CausalLinks } from "./components/CausalLinks";
 import { VarBindings } from "./components/VarBindings";
 import { CommandBar } from "./components/CommandBar";
+import { Status } from "./components/Status";
 
 const addy = "http://localhost:8084/";
 /**
@@ -19,9 +20,17 @@ export default function App() {
       .then((results) => setPlan(results));
   };
 
-  const playPlan = (e: Event) => {
+  const playPlan = async (e: Event) => {
     e.preventDefault();
-    fetch(addy + "play", { method: "POST" })
+    await fetch(addy + "play", {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-cache",
+      body: JSON.stringify(content),
+    })
       .then((res) => res.json())
       .then((results) => setPlan(results));
   };
@@ -33,13 +42,31 @@ export default function App() {
       .then((results) => setPlan(results));
   };
 
+  const parseMsg = (response) => {
+    // @ts-ignore
+    if (Object.hasOwn(response, "error")) {
+      return response.error;
+    } else {
+      return "Everything's fine";
+    }
+  };
+
   const [content, setContent] = React.useState(null);
-  const emptyLink = [{ createdBy: "", consumedBy: "", preposition: "" }];
+  const emptyLink = [
+    {
+      createdBy: "",
+      consumedBy: "",
+      preposition: { action: "", operation: "", parameters: "" },
+    },
+  ];
   const emptyAction = [{ name: "" }];
   const emptyBindings = [["", [{ equal: true, assignor: "", assignee: "" }]]];
+
+  // once a plan is loaded into state, it's tossed into content state
+  // which is read into the ui
   React.useEffect(() => {
     if (plan) {
-      setContent({ links: emptyLink, ...plan });
+      setContent(plan);
     }
   }, [plan]);
 
@@ -58,6 +85,7 @@ export default function App() {
         </header>
         <VarBindings
           bindings={content ? content.variableBindings : emptyBindings}
+          includeSame={true}
         />
       </div>
       <div className="c3">
@@ -70,6 +98,7 @@ export default function App() {
         <header className="header">
           <h1>Status</h1>
         </header>
+        <Status msg={content ? parseMsg(content) : "No plan yet"} />
       </div>
       <CommandBar
         refreshOnClick={refreshPlan}

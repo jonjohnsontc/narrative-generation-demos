@@ -13,15 +13,17 @@ type Props = {
 export function Actions({ actions }: Props) {
   return (
     <div className="panel">
-      <ul>
-        {actions.map((action) => {
-          return (
-            <li key={action.name} className="action-listing">
-              {action.name}
-            </li>
-          );
-        })}
-      </ul>
+      <div className="inner-panel">
+        <ul>
+          {actions.map((action) => {
+            return (
+              <li key={action.name} className="action-listing">
+                {action.name}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 }

@@ -703,13 +703,15 @@ var POP = function PartialOrderPlan(plan, agenda, domain, objects, recur) {
                 objects: objects
             };
         }
-        // 6. recursive invocation
-        (0, exports.POP)({
-            actions: actions,
-            order: order,
-            links: links,
-            variableBindings: variableBindings
-        }, agenda, domain, objects, true);
+        else {
+            // 6. recursive invocation
+            (0, exports.POP)({
+                actions: actions,
+                order: order,
+                links: links,
+                variableBindings: variableBindings
+            }, agenda, domain, objects, true);
+        }
     }
 };
 exports.POP = POP;

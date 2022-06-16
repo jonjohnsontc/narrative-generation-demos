@@ -25,18 +25,19 @@ const variableBindings = new Map([
   ["table", [{ equal: true, assignor: "table", assignee: "table" }]],
 ]);
 debugger;
-export const result = POP(
-  {
-    actions: actions,
-    order: orderingConstraints,
-    links: causalLinks,
-    variableBindings: variableBindings,
-  },
-  agenda,
-  domain,
-  objects,
-  false
-);
+export const result = () =>
+  POP(
+    {
+      actions: actions,
+      order: orderingConstraints,
+      links: causalLinks,
+      variableBindings: variableBindings,
+    },
+    agenda,
+    domain,
+    objects,
+    false
+  );
 
 export {
   actions,
