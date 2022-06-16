@@ -49,5 +49,10 @@
     "typeRoots": [
       "./shared-libs/types"
     ]
+  },
+  "nodemonConfig": {
+    "execMap": {
+      "ts": "node --require ts-node/register/transpile-only"
+    }
   }
 }
